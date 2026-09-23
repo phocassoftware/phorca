@@ -7,7 +7,6 @@ import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT
 } from './renderer-shutdown-events'
-import type { UpdateStatus } from './update-status-types'
 
 export type AppRestartPrepOptions = {
   startedEventName: string
@@ -88,39 +87,5 @@ export async function prepareRendererForAppRestart(
       )
     )
     throw error
-  }
-}
-
-export type UpdaterQuitAbortRelay = {
-  markPrepared: () => void
-  abort: () => void
-  handleStatus: (status: UpdateStatus) => void
-}
-
-export function createUpdaterQuitAbortRelay(
-  eventTarget: EventTarget,
-  abortedEventName: string
-): UpdaterQuitAbortRelay {
-  let prepared = false
-  const abort = (): void => {
-    if (!prepared) {
-      return
-    }
-    prepared = false
-    eventTarget.dispatchEvent(new Event(abortedEventName))
-  }
-
-  return {
-    markPrepared(): void {
-      prepared = true
-    },
-    abort,
-    handleStatus(status): void {
-      // Why: quitAndInstall IPC resolves after scheduling; a later updater
-      // error is the authoritative signal that the app will remain open.
-      if (status.state === 'error') {
-        abort()
-      }
-    }
   }
 }

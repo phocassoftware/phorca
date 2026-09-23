@@ -2,7 +2,9 @@ import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
-import { notifyServeSupervisorReady } from '../serve-update-handoff'
+// Why local (was shared/serve-update-handoff.ts): that update-handoff protocol is gone;
+// this best-effort readiness ping to an optional parent process (e.g. a supervising
+// script) is the only piece worth keeping, so it lives directly at its sole call site.
 import { mainProcessState as state } from './main-process-state'
 import { getServeOptions, type ServeOptions } from './serve-options'
 
@@ -93,4 +95,17 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
       : { mode: options.json ? 'json' : 'human' }
   )
   notifyServeSupervisorReady(runtime.getRuntimeId())
+}
+
+/** Best-effort readiness ping to an optional supervising parent process. Silent no-op
+ *  when the process has no IPC channel (e.g. a plain terminal launch). */
+function notifyServeSupervisorReady(runtimeId: string): void {
+  if (!process.send || process.connected === false) {
+    return
+  }
+  try {
+    process.send({ type: 'orca:serve-ready', version: app.getVersion(), runtimeId })
+  } catch {
+    // Best-effort only; a supervisor that can't receive this can't act on it either.
+  }
 }

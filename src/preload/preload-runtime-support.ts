@@ -2,8 +2,6 @@ import { ipcRenderer, webUtils } from 'electron'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
-import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
-import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -182,9 +180,4 @@ export function installBrowserFindListener(): void {
   browserFindListenerInstalled = true
 }
 
-export const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
-  window,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-)
-
-registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
+registerRendererRestartIpcRelays(ipcRenderer, window)

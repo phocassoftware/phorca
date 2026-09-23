@@ -3,7 +3,7 @@ import type { PreloadApi } from './api-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT
-} from '../shared/updater-renderer-events'
+} from '../shared/renderer-shutdown-events'
 import { KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../shared/keyboard-layout-events'
 
 const { exposeInMainWorld, invoke, on, removeListener, send, sendSync } = vi.hoisted(() => ({

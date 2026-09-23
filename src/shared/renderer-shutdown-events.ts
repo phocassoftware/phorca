@@ -1,4 +1,9 @@
 export const ORCA_RENDERER_UNLOAD_PREVENTED_EVENT = 'orca:renderer-unload-prevented'
+/** Dispatched when a renderer-initiated app restart (relaunch/restart/reload, or lazy-chunk
+ *  recovery) begins preparing, and again if it aborts, so beforeunload/unsaved-change guards
+ *  can suspend themselves for the duration of a restart they should not veto. */
+export const ORCA_APP_RESTART_STARTED_EVENT = 'orca:app-restart-started'
+export const ORCA_APP_RESTART_ABORTED_EVENT = 'orca:app-restart-aborted'
 export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT =
   'orca:renderer-shutdown-checkpoint-failed'
 export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT =

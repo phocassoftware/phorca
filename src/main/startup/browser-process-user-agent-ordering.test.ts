@@ -59,20 +59,11 @@ vi.mock('./configure-process', () => ({
   optOutOfHiddenPageWakeUpThrottling: vi.fn(),
   patchPackagedProcessPath: vi.fn()
 }))
-vi.mock('../serve-update-handoff', () => ({ installServeSupervisorDisconnectQuit: vi.fn() }))
 vi.mock('./main-process-error-guards', () => ({
   installUncaughtPipeErrorGuard: vi.fn(),
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
-vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
-vi.mock('../updater', () => ({
-  getRemoteServerUpdaterSnapshot: vi.fn(),
-  checkForRemoteServerUpdate: vi.fn(),
-  downloadRemoteServerUpdate: vi.fn(),
-  installRemoteServerUpdate: vi.fn(),
-  isQuittingForUpdate: () => false
-}))
 vi.mock('./dev-instance-identity', () => ({
   getDevInstanceIdentity: () => ({
     isDev: true,

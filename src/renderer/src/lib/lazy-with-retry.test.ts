@@ -10,10 +10,12 @@ import {
 import { preventUnloadAndScheduleShutdownCheckpointReset } from './shutdown-checkpoint-guard'
 import {
   isIntentionalAppRestartInProgress,
-  registerUpdaterBeforeUnloadBypass
-} from './updater-beforeunload'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
-import { ORCA_APP_RESTART_ABORTED_EVENT } from '../../../shared/updater-renderer-events'
+  registerAppRestartBeforeUnloadBypass
+} from './app-restart-tracker'
+import {
+  ORCA_APP_RESTART_ABORTED_EVENT,
+  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
+} from '../../../shared/renderer-shutdown-events'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -378,7 +380,7 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       hotExitBackups: 0,
       restartLatchAtNavigation: false
     }
-    const cleanupBypass = registerUpdaterBeforeUnloadBypass()
+    const cleanupBypass = registerAppRestartBeforeUnloadBypass()
 
     const dirtyTabGuard = (event: Event): void => {
       if (isIntentionalAppRestartInProgress()) {

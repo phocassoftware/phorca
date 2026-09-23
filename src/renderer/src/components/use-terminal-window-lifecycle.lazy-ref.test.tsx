@@ -33,7 +33,7 @@ vi.mock('../store/slices/browser-webview-cleanup', () => ({
   destroyRemovedBrowserWebview: vi.fn()
 }))
 
-vi.mock('@/lib/updater-beforeunload', () => ({
+vi.mock('@/lib/app-restart-tracker', () => ({
   isIntentionalAppRestartInProgress: () => false
 }))
 vi.mock('@/lib/shutdown-checkpoint-guard', () => ({

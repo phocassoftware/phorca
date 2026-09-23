@@ -22,8 +22,6 @@ import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { shutdownTelemetry } from '../telemetry/client'
 import { shutdownObservability } from '../observability'
-import { isQuittingForUpdate } from '../updater'
-import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
@@ -66,11 +64,6 @@ function shutdownWatchersOnce(): Promise<void> {
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', () => {
-    if (isQuittingForUpdate()) {
-      recordUpdaterLifecycle('before_quit_allowed', undefined, {
-        message: 'before-quit allowed for update install'
-      })
-    }
     state.isQuitting = true
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
@@ -112,14 +105,6 @@ function installWillQuitHandler(): void {
     state.unsubscribeSystemResumeBroadcast = null
     // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
     stopTccPromptNotice()
-    const updateQuitInProgress = isQuittingForUpdate()
-    if (updateQuitInProgress) {
-      recordUpdaterLifecycle(
-        'will_quit_cleanup_started',
-        { daemonTeardown: 'disconnect' },
-        { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
-      )
-    }
     // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
     destroySystemTray()
     // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
@@ -135,8 +120,8 @@ function installWillQuitHandler(): void {
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     // Why before the stop: teardown stamps each working session's resume marker with why the app
-    // went away, and an update install is a restart the user never chose.
-    setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
+    // went away.
+    setStructuredAgentSessionTeardownTrigger('quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)

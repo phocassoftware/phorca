@@ -482,44 +482,4 @@ describe('startup ordering', () => {
     expect(desktopSetWebContents).toBeGreaterThanOrEqual(0)
     expect(desktopAutomationStart).toBeGreaterThan(desktopSetWebContents)
   })
-
-  it('installs the serve supervisor disconnect quit after the app environment and data path', () => {
-    // Why (#16761): the call resolves the handoff path through getCanonicalUserDataPath(). At module
-    // scope that accessor throws by design, so every `orca serve` process on macOS died at startup
-    // before it could listen. serve-update-handoff.test.ts mocks the resolver, so only ordering
-    // catches this; serve-update-handoff.app-environment.test.ts pins the throw it depends on.
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    const install = 'installServeSupervisorDisconnectQuit(state.isServeMode)'
-    const appEnvironmentIndex = source.indexOf('setAppEnvironment(new ElectronAppEnvironment())')
-    const dataPathIndex = source.indexOf('initDataPath()')
-    const installIndex = source.indexOf(install)
-    // Why this anchor: preflight returns early when the lock is lost, so this gate is the split's
-    // equivalent of the old `if (hasSingleInstanceLock)` block head.
-    const lockGateIndex = source.indexOf('if (!hasLock) {')
-
-    expect(source.split(install).length - 1, `${install} should appear exactly once`).toBe(1)
-    expect(appEnvironmentIndex).toBeGreaterThanOrEqual(0)
-    expect(dataPathIndex).toBeGreaterThan(appEnvironmentIndex)
-    expect(installIndex).toBeGreaterThan(dataPathIndex)
-    expect(lockGateIndex).toBeGreaterThanOrEqual(0)
-    expect(installIndex).toBeGreaterThan(lockGateIndex)
-
-    // Why also pin it synchronous: 'disconnect' cannot be delivered while preflight is still
-    // running, which is the whole reason deferring it is free. Parked behind an await — say
-    // inside app.whenReady() — the ordering above still holds but a parent that dies in the gap
-    // leaves the serve process orphaned on its port, which is the failure this handler prevents.
-    expect(source).toContain('export function runMainProcessPreflight(')
-    // Why only statements at block indentation: the span covers unrelated helper bodies, and an
-    // `await` inside one of those is not what this guards against — the risk is this call itself
-    // being parked behind one.
-    const blockStatements = source
-      .slice(lockGateIndex, installIndex)
-      .split('\n')
-      .filter((line) => /^ {2}\S/.test(line) && !line.trim().startsWith('//'))
-      .join('\n')
-    expect(blockStatements).not.toContain('await')
-  })
 })

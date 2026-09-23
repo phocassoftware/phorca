@@ -3,10 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
-} from '../../../shared/updater-renderer-events'
-import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
@@ -17,8 +13,8 @@ import {
 } from '../lib/shutdown-checkpoint-guard'
 import {
   isIntentionalAppRestartInProgress,
-  registerUpdaterBeforeUnloadBypass
-} from '../lib/updater-beforeunload'
+  registerAppRestartBeforeUnloadBypass
+} from '../lib/app-restart-tracker'
 import {
   createShutdownCheckpointPersist,
   type ShutdownCheckpointPersistDeps
@@ -57,7 +53,7 @@ function createLifecycleHarness(
   })
   const guard = createShutdownCheckpointGuard(persist.run, persist.abandonAttempt)
   const checkpoint = createShutdownCheckpointBeforeUnloadHandler(guard)
-  const cleanupRestartTracking = registerUpdaterBeforeUnloadBypass()
+  const cleanupRestartTracking = registerAppRestartBeforeUnloadBypass()
   window.addEventListener('beforeunload', checkpoint)
   window.addEventListener(
     ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
@@ -94,35 +90,24 @@ describe('shutdown checkpoint restart lifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    {
-      lifecycle: 'app restart',
-      startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-      abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
-    },
-    {
-      lifecycle: 'updater install',
-      startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-      abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-    }
-  ])(
-    'preserves retry-then-degrade across a checkpoint-caused $lifecycle abort',
-    async ({ startedEventName, abortedEventName }) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const harness = createLifecycleHarness(startedEventName, abortedEventName)
-      cleanupFns.push(harness.cleanup)
+  it('preserves retry-then-degrade across a checkpoint-caused app restart abort', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const harness = createLifecycleHarness(
+      ORCA_APP_RESTART_STARTED_EVENT,
+      ORCA_APP_RESTART_ABORTED_EVENT
+    )
+    cleanupFns.push(harness.cleanup)
 
-      await expect(harness.prepare()).rejects.toThrow('deterministic full-stage failure')
-      expect(isIntentionalAppRestartInProgress()).toBe(false)
-      await expect(harness.prepare()).resolves.toBeUndefined()
+    await expect(harness.prepare()).rejects.toThrow('deterministic full-stage failure')
+    expect(isIntentionalAppRestartInProgress()).toBe(false)
+    await expect(harness.prepare()).resolves.toBeUndefined()
 
-      expect(harness.stageBeforeUnloadSync).toHaveBeenCalledTimes(3)
-      expect(harness.stageBeforeUnloadSync).toHaveBeenLastCalledWith({
-        sessions: [],
-        ui: { activeView: 'workspace' }
-      })
-    }
-  )
+    expect(harness.stageBeforeUnloadSync).toHaveBeenCalledTimes(3)
+    expect(harness.stageBeforeUnloadSync).toHaveBeenLastCalledWith({
+      sessions: [],
+      ui: { activeView: 'workspace' }
+    })
+  })
 
   it('abandons retry state when a later restart attempt is independently canceled', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -140,14 +125,12 @@ describe('shutdown checkpoint restart lifecycle', () => {
     expect(harness.stageBeforeUnloadSync).toHaveBeenCalledTimes(2)
   })
 
-  // Mirrors the e2e fixture in tests/e2e/update-install-renderer-checkpoint-recovery.spec.ts,
-  // which asserted the pre-STA-5505 bare message long after the cause suffix landed (STA-5668).
   it('names the snapshot-build cause when dirty drafts block the checkpoint', async () => {
     const snapshotFailure = "Cannot read properties of null (reading 'toLowerCase')"
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const harness = createLifecycleHarness(
-      ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-      ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+      ORCA_APP_RESTART_STARTED_EVENT,
+      ORCA_APP_RESTART_ABORTED_EVENT,
       {
         buildSessionSnapshots: () => {
           throw new Error(snapshotFailure)
