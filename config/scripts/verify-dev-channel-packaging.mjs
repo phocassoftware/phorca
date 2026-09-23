@@ -1,25 +1,11 @@
 #!/usr/bin/env node
-// Why this exists: the dev-channel workflows run from main, but they build (and
-// therefore read `config/electron-builder.config.cjs` from) whatever ref was
-// asked for. A branch cut before Windows dev builds landed has a config that
-// ignores ORCA_WIN_*, which would resolve `publish.repo` to the *main* repo and
-// leave the release identity signed-looking. Publishing would then fail deep
-// inside electron-builder with a 404 from a token scoped to the dev repo — or,
-// worse, succeed against a repo it was never meant to touch.
-//
-// So: load the config exactly as electron-builder will, and assert the identity
-// it produced matches the channel and platform the workflow believes it is
-// building. Runs before packaging, fails with a sentence someone can act on.
+// Validate legacy channel builds against Phorca's managed packaging policy.
+// Channels may still inject an allocated version, but they must never regain
+// an electron-builder publisher or a signing identity through this seam.
 
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-
-const CHANNEL_REPOS = {
-  hourly: 'orca-hourly',
-  daily: 'orca-daily',
-  adhoc: 'orca-adhoc'
-}
 
 const CHANNEL_VERSION_ENV = {
   hourly: 'ORCA_HOURLY_BUILD_VERSION',
@@ -29,30 +15,18 @@ const CHANNEL_VERSION_ENV = {
 
 export function collectDevChannelPackagingProblems({ channel, platform, config, env }) {
   const problems = []
-  const expectedRepo = CHANNEL_REPOS[channel]
-  if (!expectedRepo) {
+  const versionVariable = CHANNEL_VERSION_ENV[channel]
+  if (!versionVariable) {
     return [
-      `Unknown dev channel "${channel}"; expected one of ${Object.keys(CHANNEL_REPOS).join(', ')}.`
+      `Unknown dev channel "${channel}"; expected one of ${Object.keys(CHANNEL_VERSION_ENV).join(', ')}.`
     ]
   }
 
-  if (config.publish?.repo !== expectedRepo) {
-    problems.push(
-      `publish.repo is "${config.publish?.repo}" but this ${channel} build must publish to "${expectedRepo}". ` +
-        `The checked-out ref's electron-builder config does not understand this channel on ${platform} — rebase it onto a main that does.`
-    )
+  if (config.publish !== undefined) {
+    problems.push('electron-builder publish configuration must be absent for managed Phorca builds.')
   }
 
-  if (config.publish?.releaseType !== 'prerelease') {
-    problems.push(
-      `publish.releaseType is "${config.publish?.releaseType}" but dev-channel builds must publish as "prerelease".`
-    )
-  }
-
-  // Why version too: `extraMetadata.version` is what stamps the tag the workflow
-  // already created. A config that dropped it would package package.json's
-  // version and upload into the wrong release entirely.
-  const expectedVersion = env[CHANNEL_VERSION_ENV[channel]]
+  const expectedVersion = env[versionVariable]
   if (expectedVersion && config.extraMetadata?.version !== expectedVersion) {
     problems.push(
       `extraMetadata.version is "${config.extraMetadata?.version}" but the workflow computed "${expectedVersion}".`
@@ -60,19 +34,36 @@ export function collectDevChannelPackagingProblems({ channel, platform, config, 
   }
 
   if (platform === 'win32') {
-    // The one that silently breaks updates rather than failing the build: a dev
-    // build that advertises a publisherName can never install its own channel's
-    // next build, because electron-updater verifies against the name baked into
-    // the installed app.
-    if (config.win?.verifyUpdateCodeSignature !== false) {
-      problems.push(
-        'win.verifyUpdateCodeSignature must be false for unsigned dev builds, or electron-updater will Authenticode-verify every installer this build downloads and reject all of them.'
-      )
+    const targets = config.win?.target ?? []
+    const targetNames = targets.map((target) =>
+      typeof target === 'string' ? target : target.target
+    )
+    if (targetNames.length !== 1 || targetNames[0] !== 'nsis') {
+      problems.push(`win.target must contain exactly one "nsis" target, got ${JSON.stringify(targets)}.`)
     }
-    if (config.win?.signtoolOptions?.publisherName != null) {
-      problems.push(
-        `win.signtoolOptions.publisherName is set to "${config.win.signtoolOptions.publisherName}" on an unsigned dev build; it must be absent.`
-      )
+    if (config.win?.signtoolOptions !== undefined) {
+      problems.push('win.signtoolOptions must be absent because Windows artifacts are unsigned.')
+    }
+  }
+
+  if (platform === 'darwin') {
+    const targets = config.mac?.target ?? []
+    const targetNames = targets.map((target) =>
+      typeof target === 'string' ? target : target.target
+    )
+    if (targetNames.length !== 1 || targetNames[0] !== 'dmg') {
+      problems.push(`mac.target must contain exactly one "dmg" target, got ${JSON.stringify(targets)}.`)
+    }
+    if (config.mac?.identity !== '-') {
+      problems.push('mac.identity must be "-" for identity-less ad-hoc signing.')
+    }
+    for (const key of ['notarize', 'hardenedRuntime']) {
+      if (config.mac?.[key] !== undefined) {
+        problems.push(`mac.${key} must be absent; managed builds are not notarized or hardened.`)
+      }
+    }
+    if (config.forceCodeSigning !== undefined) {
+      problems.push('forceCodeSigning must be absent for ad-hoc signing.')
     }
   }
 
@@ -94,7 +85,7 @@ function main() {
   const { channel, platform = process.platform } = parseArgs(process.argv.slice(2))
   if (!channel) {
     console.error(
-      'Usage: verify-dev-channel-packaging.mjs --channel=<hourly|daily|adhoc> [--platform=win32]'
+      'Usage: verify-dev-channel-packaging.mjs --channel=<hourly|daily|adhoc> [--platform=win32|darwin]'
     )
     process.exit(1)
   }
@@ -113,7 +104,7 @@ function main() {
     process.exit(1)
   }
   console.log(
-    `Dev-channel packaging verified: ${channel} on ${platform} → stablyai/${CHANNEL_REPOS[channel]} @ ${config.extraMetadata?.version}`
+    `Managed packaging verified: ${channel} on ${platform} @ ${config.extraMetadata?.version ?? 'default version'}; publisher disabled.`
   )
 }
 

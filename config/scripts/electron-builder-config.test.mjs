@@ -9,16 +9,41 @@ import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tre
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
 
-const require = createRequire(import.meta.url)
+const previousPlaceholderOptIn = process.env.PHORCA_ALLOW_PLACEHOLDER_IDENTITY
+process.env.PHORCA_ALLOW_PLACEHOLDER_IDENTITY = '1'
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+if (previousPlaceholderOptIn === undefined) {
+  delete process.env.PHORCA_ALLOW_PLACEHOLDER_IDENTITY
+} else {
+  process.env.PHORCA_ALLOW_PLACEHOLDER_IDENTITY = previousPlaceholderOptIn
+}
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
-const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
-  it('keeps the packaged app identity aligned with local-build validation', () => {
-    expect(electronBuilderConfig.appId).toBe(
-      require('../../src/shared/local-build-compatibility-contract.json').appId
+  it('keeps the Q-004 identity unresolved behind one loud placeholder seam', () => {
+    expect(electronBuilderConfig.appId).toMatch(/^com\.phorca\.q004-placeholder$/)
+    expect(electronBuilderConfig.productName).toMatch(/^q004-placeholder$/)
+    expect(electronBuilderConfig.appId).toContain(electronBuilderConfig.productName)
+  })
+
+  it('narrows release packaging to unsigned Windows NSIS and ad-hoc macOS DMG targets', () => {
+    expect(electronBuilderConfig.publish).toBeUndefined()
+    expect(electronBuilderConfig.win.target).toEqual(['nsis'])
+    expect(electronBuilderConfig.mac.target).toEqual([
+      { target: 'dmg', arch: ['x64', 'arm64'] }
+    ])
+    expect(electronBuilderConfig.linux).toBeUndefined()
+    expect(electronBuilderConfig.mac.identity).toBe('-')
+    expect(electronBuilderConfig.mac.notarize).toBeUndefined()
+    expect(electronBuilderConfig.mac.hardenedRuntime).toBeUndefined()
+    expect(electronBuilderConfig.forceCodeSigning).toBeUndefined()
+    expect(electronBuilderConfig.win.signtoolOptions).toBeUndefined()
+    expect(electronBuilderConfig.nsis.artifactName).toBe(
+      'q004-placeholder-windows-setup.${ext}'
+    )
+    expect(electronBuilderConfig.dmg.artifactName).toBe(
+      'q004-placeholder-macos-${arch}.${ext}'
     )
   })
 
@@ -110,7 +135,7 @@ describe('electron-builder config', () => {
       from: 'resources/plugins/launch',
       to: 'plugins/launch'
     })
-    for (const platform of ['mac', 'linux', 'win']) {
+    for (const platform of ['mac', 'win']) {
       expect(electronBuilderConfig[platform].extraResources).toContainEqual({
         from: 'resources/skills',
         to: 'skills'
@@ -124,14 +149,6 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
           to: 'Orca Computer Use.app'
-        })
-      ])
-    )
-    expect(electronBuilderConfig.linux.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/computer-use-linux/runtime.py',
-          to: 'computer-use-linux/runtime.py'
         })
       ])
     )
@@ -265,71 +282,6 @@ describe('electron-builder config', () => {
     )
   })
 
-  it('uses the multi-size icon source for Linux packages', () => {
-    expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
-  })
-
-  it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
-  })
-
-  it('uses the release artifact set as local Linux targets without changing existing names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
-    expect(electronBuilderConfig.toolsets).toEqual({ appimage: '1.0.3' })
-    expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
-    expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
-    expect(electronBuilderConfig.rpm).toMatchObject({
-      packageName: 'orca-ide',
-      artifactName: 'orca-ide-${version}.${arch}.${ext}'
-    })
-  })
-
-  it('retains electron-builder runtime dependencies in deb and rpm packages', () => {
-    for (const target of ['deb', 'rpm']) {
-      const dependencies = electronBuilderConfig[target].depends
-      expect(dependencies).toEqual(
-        expect.arrayContaining(FpmTarget.prototype.getDefaultDepends(target))
-      )
-      expect(new Set(dependencies).size).toBe(dependencies.length)
-    }
-  })
-
-  it('validates each AppImage before electron-builder publishes it', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-appimage-'))
-    try {
-      const appImage = join(root, 'orca-linux.AppImage')
-      await writeFile(appImage, 'not an ELF')
-      await chmod(appImage, 0o755)
-
-      expect(() =>
-        electronBuilderConfig.artifactBuildCompleted({ file: appImage, arch: 1 })
-      ).toThrow(/ELF header is outside/)
-      expect(() =>
-        electronBuilderConfig.artifactBuildCompleted({ file: join(root, 'orca-ide.deb') })
-      ).not.toThrow()
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-  it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
-    const configPath = require.resolve('../electron-builder.config.cjs')
-    const original = process.env.ORCA_LINUX_ARM64_RELEASE
-    try {
-      delete require.cache[configPath]
-      process.env.ORCA_LINUX_ARM64_RELEASE = '1'
-      expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
-        'orca-linux-arm64.${ext}'
-      )
-    } finally {
-      if (original === undefined) {
-        delete process.env.ORCA_LINUX_ARM64_RELEASE
-      } else {
-        process.env.ORCA_LINUX_ARM64_RELEASE = original
-      }
-      delete require.cache[configPath]
-      require('../electron-builder.config.cjs')
-    }
-  })
 
   it('overrides packaged semver only for local macOS builds', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
@@ -388,52 +340,6 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
 
-  // Why: the .deb/.rpm update-recovery path keys entirely off the resources/package-type marker that
-  // app-builder-lib's FpmTarget writes. If packaging silently stops shipping an fpm target, or adds
-  // one the recovery path does not cover, getLinuxRootPackageType() returns null, autoInstallOnAppQuit
-  // quietly goes back to true, and no unit test notices.
-  describe('linux root-package update recovery contract', () => {
-    // FpmTarget writes resources/package-type only for targets it supports auto-update for.
-    const MARKER_TARGETS = new Set(['deb', 'rpm', 'pacman'])
-    const RECOVERABLE_TARGETS = new Set(['deb', 'rpm'])
-    const linuxTargets = electronBuilderConfig.linux.target.map((entry) =>
-      typeof entry === 'string' ? entry : entry.target
-    )
-
-    it('still ships an AppImage plus at least one root-package target', () => {
-      expect(linuxTargets).toContain('AppImage')
-      expect(linuxTargets.some((target) => MARKER_TARGETS.has(target))).toBe(true)
-    })
-
-    it('ships no root-package target the recovery path cannot recover', () => {
-      const unrecoverable = linuxTargets.filter(
-        (target) => MARKER_TARGETS.has(target) && !RECOVERABLE_TARGETS.has(target)
-      )
-      expect(unrecoverable).toEqual([])
-    })
-
-    it('accepts exactly the markers electron-updater maps to a root-package updater', async () => {
-      const source = await readFile(
-        new URL('../../src/main/linux-update-package-type.ts', import.meta.url),
-        'utf8'
-      )
-      for (const target of linuxTargets.filter((entry) => RECOVERABLE_TARGETS.has(entry))) {
-        expect(source).toContain(`value === '${target}'`)
-      }
-    })
-
-    it('keeps the pinned FpmTarget overwrite for configured deb and rpm artifacts', async () => {
-      const source = await readFile(
-        require.resolve('app-builder-lib/out/targets/FpmTarget'),
-        'utf8'
-      )
-
-      expect(source).toContain('path.join(resourceDir, "package-type"), target')
-      for (const target of RECOVERABLE_TARGETS) {
-        expect(electronBuilderConfig[target]).toBeDefined()
-      }
-    })
-  })
 })
 
 describe('arch-aware packaging guard', () => {

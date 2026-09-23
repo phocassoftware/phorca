@@ -367,9 +367,6 @@ importers:
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
-      electron-builder-squirrel-windows:
-        specifier: ^26.15.3
-        version: 26.15.3(dmg-builder@26.15.3)
       electron-vite:
         specifier: ^5.0.0
         version: 5.0.0(@swc/core@1.15.46)(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.25.12)(jiti@2.7.0)(yaml@2.8.4))

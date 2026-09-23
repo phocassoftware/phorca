@@ -1,51 +1,48 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
+const require = createRequire(import.meta.url)
+const { getPhorcaArtifactNames } = require('./phorca-package-identity.cjs')
 const API_VERSION = '2022-11-28'
 
-export function getRequiredReleaseAssetNames(tag) {
-  const version = tag.replace(/^v/i, '')
+// Q-003 keeps the current dual-architecture macOS matrix. Change this one
+// constant when the approved platform matrix changes; the allowlist remains
+// exact for every architecture selected here.
+export const MAC_RELEASE_ARCHES = Object.freeze(['x64', 'arm64'])
+const EVIDENCE_MANIFEST_ASSET = 'evidence-manifest.json'
+
+export function getRequiredReleaseAssetNames(_tag) {
+  const artifactNames = getPhorcaArtifactNames()
   return [
-    'latest-linux.yml',
-    'latest-linux-arm64.yml',
-    'latest-mac.yml',
-    'latest.yml',
-    'orca-linux.AppImage',
-    'orca-linux-arm64.AppImage',
-    `orca-ide_${version}_amd64.deb`,
-    `orca-ide_${version}_arm64.deb`,
-    `orca-ide-${version}.x86_64.rpm`,
-    `orca-ide-${version}.aarch64.rpm`,
-    'orca-windows-setup.exe',
-    'orca-windows-setup.exe.blockmap',
-    `Orca-${version}-mac.zip`,
-    `Orca-${version}-mac.zip.blockmap`,
-    `Orca-${version}-arm64-mac.zip`,
-    `Orca-${version}-arm64-mac.zip.blockmap`,
-    'orca-macos-x64.dmg',
-    'orca-macos-x64.dmg.blockmap',
-    'orca-macos-arm64.dmg',
-    'orca-macos-arm64.dmg.blockmap'
+    `${artifactNames.windowsInstaller}.exe`,
+    ...MAC_RELEASE_ARCHES.map((arch) => `${artifactNames.macDmg}-${arch}.dmg`),
+    EVIDENCE_MANIFEST_ASSET
   ]
 }
 
-export function extractManifestAssetNames(manifestText) {
-  const names = new Set()
-  for (const line of manifestText.split(/\r?\n/)) {
-    const match = line.match(/^\s*(?:-\s*)?(?:url|path):\s*['"]?([^'"]+)['"]?\s*$/)
-    if (!match) {
-      continue
-    }
-    const value = match[1].trim()
-    try {
-      names.add(new URL(value).pathname.split('/').findLast(Boolean) ?? value)
-    } catch {
-      names.add(value.split('/').findLast(Boolean) ?? value)
-    }
+
+export function validateReleaseAssetNames({ tag, assetNames }) {
+  const required = getRequiredReleaseAssetNames(tag)
+  const counts = new Map()
+  for (const name of assetNames) {
+    counts.set(name, (counts.get(name) ?? 0) + 1)
   }
-  return [...names]
+  const duplicates = [...counts]
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name)
+    .sort()
+  const expected = new Set(required)
+  const present = new Set(assetNames)
+  return {
+    required,
+    duplicates,
+    missing: required.filter((name) => !present.has(name)).sort(),
+    unexpected: [...present].filter((name) => !expected.has(name)).sort()
+  }
 }
+
 
 async function githubFetch(url, token, accept = 'application/vnd.github+json') {
   const res = await fetch(url, {
@@ -76,55 +73,44 @@ async function fetchRelease(repo, tag, token) {
   return release
 }
 
-async function fetchAssetText(repo, asset, token) {
-  const res = await githubFetch(
-    `https://api.github.com/repos/${repo}/releases/assets/${asset.id}`,
-    token,
-    'application/octet-stream'
-  )
-  return res.text()
-}
 
 export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
   const release = await fetchRelease(repo, tag, token)
-  const assetsByName = new Map(release.assets.map((asset) => [asset.name, asset]))
-
-  const requiredNames = new Set(getRequiredReleaseAssetNames(tag))
-  const manifestNames = [
-    'latest-linux.yml',
-    'latest-linux-arm64.yml',
-    'latest-mac.yml',
-    'latest.yml'
-  ]
-
-  for (const manifestName of manifestNames) {
-    const manifestAsset = assetsByName.get(manifestName)
-    if (!manifestAsset) {
-      continue
-    }
-    const manifestText = await fetchAssetText(repo, manifestAsset, token)
-    for (const referencedName of extractManifestAssetNames(manifestText)) {
-      requiredNames.add(referencedName)
-    }
+  if (!Array.isArray(release.assets)) {
+    throw new Error(`Release ${repo}@${tag} returned a non-array assets field`)
   }
 
-  const missing = [...requiredNames].filter((name) => !assetsByName.has(name)).sort()
-  const notUploaded = [...requiredNames]
+  const assetNames = release.assets.map((asset) => asset.name)
+  const validation = validateReleaseAssetNames({ tag, assetNames })
+  const assetsByName = new Map(release.assets.map((asset) => [asset.name, asset]))
+  const notUploaded = validation.required
     .map((name) => assetsByName.get(name))
     .filter((asset) => asset && asset.state && asset.state !== 'uploaded')
     .map((asset) => `${asset.name}:${asset.state}`)
     .sort()
-  const empty = [...requiredNames]
+  const empty = validation.required
     .map((name) => assetsByName.get(name))
     .filter((asset) => asset && asset.size === 0)
     .map((asset) => asset.name)
     .sort()
 
-  if (missing.length > 0 || notUploaded.length > 0 || empty.length > 0) {
+  if (
+    validation.missing.length > 0 ||
+    validation.duplicates.length > 0 ||
+    validation.unexpected.length > 0 ||
+    notUploaded.length > 0 ||
+    empty.length > 0
+  ) {
     throw new Error(
       [
-        `Release ${tag} is missing required assets.`,
-        missing.length > 0 ? `Missing: ${missing.join(', ')}` : null,
+        `Release ${tag} has an invalid asset set.`,
+        validation.missing.length > 0 ? `Missing: ${validation.missing.join(', ')}` : null,
+        validation.duplicates.length > 0
+          ? `Duplicate: ${validation.duplicates.join(', ')}`
+          : null,
+        validation.unexpected.length > 0
+          ? `Unexpected: ${validation.unexpected.join(', ')}`
+          : null,
         notUploaded.length > 0 ? `Not uploaded: ${notUploaded.join(', ')}` : null,
         empty.length > 0 ? `Empty: ${empty.join(', ')}` : null
       ]
@@ -135,7 +121,7 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
 
   return {
     tag,
-    checked: [...requiredNames].sort(),
+    checked: validation.required,
     draft: release.draft,
     prerelease: release.prerelease
   }
@@ -150,7 +136,7 @@ async function main() {
   if (!token) {
     throw new Error('GH_TOKEN or GITHUB_TOKEN must be set')
   }
-  const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
+  const repo = process.env.GITHUB_REPOSITORY || 'phocassoftware/phorca'
   const result = await verifyRequiredReleaseAssets({ repo, tag, token })
   console.log(`Verified ${result.checked.length} required release assets for ${repo}@${tag}`)
 }

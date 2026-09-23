@@ -6,13 +6,16 @@ import { collectDevChannelPackagingProblems } from './verify-dev-channel-packagi
 const require = createRequire(import.meta.url)
 const CONFIG_PATH = resolve(import.meta.dirname, '../electron-builder.config.cjs')
 
-/** The config reads process.env at require time, so each identity needs a fresh load. */
-function loadConfigWithEnv(env) {
+/** The config reads process.env at require time, so each channel needs a fresh load. */
+function loadConfigWithEnv(env, { allowPlaceholder = true } = {}) {
   const saved = { ...process.env }
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('ORCA_')) {
+    if (key.startsWith('ORCA_') || key.startsWith('PHORCA_')) {
       delete process.env[key]
     }
+  }
+  if (allowPlaceholder) {
+    process.env.PHORCA_ALLOW_PLACEHOLDER_IDENTITY = '1'
   }
   Object.assign(process.env, env)
   try {
@@ -29,83 +32,73 @@ const WIN_ADHOC_ENV = {
   ORCA_ADHOC_BUILD_VERSION: '1.4.178-adhoc.20260819010203'
 }
 
+const MAC_ADHOC_ENV = {
+  ORCA_MAC_ADHOC: '1',
+  ORCA_ADHOC_BUILD_VERSION: '1.4.178-adhoc.20260819010203'
+}
+
+const EXPECTED_MAC_TARGET = [{ target: 'dmg', arch: ['x64', 'arm64'] }]
+
 afterEach(() => {
   delete require.cache[require.resolve(CONFIG_PATH)]
 })
 
-describe('electron-builder dev-channel identity', () => {
-  it('keeps the SignPath publisherName on stable Windows builds', () => {
+describe('electron-builder managed packaging policy', () => {
+  it('keeps the unresolved Q-004 identity loud while removing publisher and updater metadata', () => {
     const config = loadConfigWithEnv({})
 
-    expect(config.win.signtoolOptions.publisherName).toBe('SignPath Foundation')
-    expect(config.win.verifyUpdateCodeSignature).toBeUndefined()
-    expect(config.publish.repo).toBe('orca')
-    expect(config.publish.releaseType).toBe('draft')
+    expect(config.appId).toContain('q004-placeholder')
+    expect(config.productName).toContain('q004-placeholder')
+    expect(config.publish).toBeUndefined()
+    expect(config.win.target).toEqual(['nsis'])
+    expect(config.win.signtoolOptions).toBeUndefined()
+    expect(config.mac.target).toEqual(EXPECTED_MAC_TARGET)
+    expect(config.mac.identity).toBe('-')
+    expect(config.mac.notarize).toBeUndefined()
+    expect(config.mac.hardenedRuntime).toBeUndefined()
+    expect(config.forceCodeSigning).toBeUndefined()
   })
-
-  // The whole point of the change: an unsigned build that advertised a
-  // publisherName would Authenticode-verify — and reject — every installer it
-  // ever downloaded, including its own way back to stable.
-  it('drops the publisherName and disables update signature checks on Windows dev builds', () => {
-    const config = loadConfigWithEnv(WIN_ADHOC_ENV)
-
-    expect(config.win.signtoolOptions?.publisherName).toBeUndefined()
-    expect(config.win.verifyUpdateCodeSignature).toBe(false)
-  })
-
-  // Why on every channel: the hook is the only handle electron-builder gives on
-  // the NSIS uninstaller, and it signs nothing — it relays the file to and from
-  // the CI SignPath request. Carrying it must not drag a publisherName onto a
-  // dev build, which is the failure the split above exists to prevent.
-  it('carries the uninstaller sign hook without changing publisherName semantics', () => {
-    for (const env of [{}, WIN_ADHOC_ENV]) {
-      const config = loadConfigWithEnv(env)
-      expect(typeof config.win.signtoolOptions.sign).toBe('function')
-    }
-    expect(loadConfigWithEnv({}).win.signtoolOptions.publisherName).toBe('SignPath Foundation')
-    expect(loadConfigWithEnv(WIN_ADHOC_ENV).win.signtoolOptions.publisherName).toBeUndefined()
+  it('fails closed when unresolved identity lacks the explicit local opt-in', () => {
+    expect(() => loadConfigWithEnv({}, { allowPlaceholder: false })).toThrow(
+      'PHORCA_ALLOW_PLACEHOLDER_IDENTITY=1'
+    )
   })
 
   it.each([
-    ['hourly', { ORCA_WIN_HOURLY: '1' }, 'orca-hourly'],
-    ['daily', { ORCA_WIN_DAILY: '1' }, 'orca-daily'],
-    ['adhoc', { ORCA_WIN_ADHOC: '1' }, 'orca-adhoc']
-  ])('publishes %s Windows builds to its own repo as a prerelease', (_channel, env, repo) => {
+    ['hourly', { ORCA_WIN_HOURLY: '1', ORCA_HOURLY_BUILD_VERSION: '1.2.3-hourly' }, '1.2.3-hourly'],
+    ['daily', { ORCA_WIN_DAILY: '1', ORCA_DAILY_BUILD_VERSION: '1.2.3-daily' }, '1.2.3-daily'],
+    ['adhoc', WIN_ADHOC_ENV, WIN_ADHOC_ENV.ORCA_ADHOC_BUILD_VERSION]
+  ])('injects the allocated %s version without enabling a publisher', (_channel, env, version) => {
     const config = loadConfigWithEnv(env)
 
-    expect(config.publish.repo).toBe(repo)
-    expect(config.publish.releaseType).toBe('prerelease')
+    expect(config.extraMetadata).toEqual({ version })
+    expect(config.publish).toBeUndefined()
+    expect(config.win.target).toEqual(['nsis'])
   })
 
-  // Why: ORCA_MAC_* gates hardened runtime, notarization, and root-level
-  // forceCodeSigning. If the Windows variables leaked into that, the Windows job
-  // would fail packaging for want of a cert it deliberately does not use.
-  it('leaves mac release signing off for Windows dev builds', () => {
-    const config = loadConfigWithEnv(WIN_ADHOC_ENV)
+  it('keeps macOS channel builds ad-hoc signed and DMG-only', () => {
+    const config = loadConfigWithEnv(MAC_ADHOC_ENV)
 
-    expect(config.forceCodeSigning).toBe(false)
-    expect(config.mac.notarize).toBe(false)
-    expect(config.mac.hardenedRuntime).toBe(false)
-  })
-
-  it('still notarizes mac dev builds', () => {
-    const config = loadConfigWithEnv({
-      ORCA_MAC_ADHOC: '1',
-      ORCA_ADHOC_BUILD_VERSION: '1.4.178-adhoc.20260819010203'
-    })
-
-    expect(config.mac.notarize).toBe(true)
-    expect(config.publish.repo).toBe('orca-adhoc')
+    expect(config.extraMetadata).toEqual({ version: MAC_ADHOC_ENV.ORCA_ADHOC_BUILD_VERSION })
+    expect(config.publish).toBeUndefined()
+    expect(config.mac.target).toEqual(EXPECTED_MAC_TARGET)
+    expect(config.mac.identity).toBe('-')
+    expect(config.mac.notarize).toBeUndefined()
+    expect(config.mac.hardenedRuntime).toBeUndefined()
   })
 })
 
 describe('collectDevChannelPackagingProblems', () => {
+  const version = '1.4.178-adhoc.20260819010203'
+  const env = { ORCA_ADHOC_BUILD_VERSION: version }
   const goodWinConfig = {
-    publish: { repo: 'orca-adhoc', releaseType: 'prerelease' },
-    extraMetadata: { version: '1.4.178-adhoc.20260819010203' },
-    win: { verifyUpdateCodeSignature: false }
+    extraMetadata: { version },
+    win: { target: ['nsis'] }
   }
-  const env = { ORCA_ADHOC_BUILD_VERSION: '1.4.178-adhoc.20260819010203' }
+  const goodMacConfig = {
+    extraMetadata: { version },
+    mac: { target: EXPECTED_MAC_TARGET, identity: '-' }
+  }
 
   it('accepts a correctly configured Windows dev build', () => {
     expect(
@@ -118,36 +111,35 @@ describe('collectDevChannelPackagingProblems', () => {
     ).toEqual([])
   })
 
-  // The failure this script exists for: a branch predating Windows dev builds
-  // resolves publish.repo to the main repo.
-  it('rejects a config that resolved the main repo', () => {
+  it('rejects any publisher configuration even when the targets are otherwise valid', () => {
     const problems = collectDevChannelPackagingProblems({
       channel: 'adhoc',
       platform: 'win32',
-      config: { ...goodWinConfig, publish: { repo: 'orca', releaseType: 'release' } },
+      config: { ...goodWinConfig, publish: {} },
       env
     })
 
-    expect(problems.join('\n')).toContain('must publish to "orca-adhoc"')
-    expect(problems.join('\n')).toContain('rebase it onto a main that does')
+    expect(problems).toContain(
+      'electron-builder publish configuration must be absent for managed Phorca builds.'
+    )
   })
 
-  it('rejects a Windows dev build that still advertises a publisherName', () => {
+  it('rejects a Windows dev build with a non-NSIS target or signing options', () => {
     const problems = collectDevChannelPackagingProblems({
       channel: 'adhoc',
       platform: 'win32',
       config: {
         ...goodWinConfig,
-        win: { signtoolOptions: { publisherName: 'SignPath Foundation' } }
+        win: { target: ['portable'], signtoolOptions: { publisherName: 'unexpected' } }
       },
       env
     })
 
-    expect(problems.join('\n')).toContain('verifyUpdateCodeSignature must be false')
-    expect(problems.join('\n')).toContain('publisherName is set to "SignPath Foundation"')
+    expect(problems.join('\n')).toContain('win.target must contain exactly one "nsis" target')
+    expect(problems.join('\n')).toContain('win.signtoolOptions must be absent')
   })
 
-  it('rejects a build packaging a version other than the tag the workflow created', () => {
+  it('rejects a build packaging a version other than the allocated channel version', () => {
     const problems = collectDevChannelPackagingProblems({
       channel: 'adhoc',
       platform: 'win32',
@@ -158,20 +150,39 @@ describe('collectDevChannelPackagingProblems', () => {
     expect(problems.join('\n')).toContain('but the workflow computed')
   })
 
-  // macOS builds are signed, so the Windows-only assertions must not fire there.
-  it('does not apply Windows signature rules to a mac dev build', () => {
+  it('accepts a correctly configured macOS dev build', () => {
     expect(
       collectDevChannelPackagingProblems({
         channel: 'adhoc',
         platform: 'darwin',
-        config: {
-          publish: { repo: 'orca-adhoc', releaseType: 'prerelease' },
-          extraMetadata: { version: '1.4.178-adhoc.20260819010203' },
-          win: { signtoolOptions: { publisherName: 'SignPath Foundation' } }
-        },
+        config: goodMacConfig,
         env
       })
     ).toEqual([])
+  })
+
+  it('rejects a macOS build that adds a ZIP target or signing/notarization policy', () => {
+    const problems = collectDevChannelPackagingProblems({
+      channel: 'adhoc',
+      platform: 'darwin',
+      config: {
+        ...goodMacConfig,
+        mac: {
+          target: ['dmg', 'zip'],
+          identity: 'Developer ID Application: unexpected',
+          notarize: true,
+          hardenedRuntime: true
+        },
+        forceCodeSigning: true
+      },
+      env
+    })
+
+    expect(problems.join('\n')).toContain('mac.target must contain exactly one "dmg" target')
+    expect(problems.join('\n')).toContain('mac.identity must be "-"')
+    expect(problems.join('\n')).toContain('mac.notarize must be absent')
+    expect(problems.join('\n')).toContain('mac.hardenedRuntime must be absent')
+    expect(problems.join('\n')).toContain('forceCodeSigning must be absent')
   })
 
   it('rejects an unknown channel', () => {
