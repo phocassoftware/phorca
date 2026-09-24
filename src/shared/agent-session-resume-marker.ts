@@ -9,9 +9,8 @@
 
 import { z } from 'zod'
 
-/** Why the app went away. Recorded because an update install is a restart the user did not choose,
- *  and the surface that offers the resume says so. */
-export const AGENT_SESSION_RESUME_TRIGGERS = ['quit', 'update'] as const
+/** Why the app went away: the normal quit path records this because the surface offers a resume. */
+export const AGENT_SESSION_RESUME_TRIGGERS = ['quit'] as const
 export type AgentSessionResumeTrigger = (typeof AGENT_SESSION_RESUME_TRIGGERS)[number]
 
 /** A marker older than this is ignored and pruned: relaunching a week later must not restart a turn

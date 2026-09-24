@@ -1,3 +1,4 @@
+import type { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import {
   QUIT_RENDERER_ACK_TIMEOUT_MS,
@@ -17,7 +18,9 @@ export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
  * force-kills after a grace period if the child ignores the forwarded signal, and
  * resolves the child's own exit code or rejects a diagnostic error for an abnormal exit.
  */
-export function superviseForegroundServe(child: ChildProcess): Promise<number> {
+type ForegroundServeChild = Pick<ChildProcess, 'kill'> & Pick<EventEmitter, 'once' | 'off'>
+
+export function superviseForegroundServe(child: ForegroundServeChild): Promise<number> {
   const { promise, resolve, reject } = Promise.withResolvers<number>()
   const forwardsHangup = process.platform === 'linux'
   const forwardedSignals = new Set<NodeJS.Signals>()

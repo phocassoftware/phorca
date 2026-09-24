@@ -17,8 +17,6 @@ import type { AutomationHostFilter } from '../../../../../shared/automation-host
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
 import type { CustomPet } from '../../../../../shared/pet-types'
-import type { ReleaseChannel } from '../../../../../shared/release-channel'
-import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
@@ -166,27 +164,10 @@ export type UISlicePersistence = {
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
   hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
-  updateStatus: UpdateStatus
-  setUpdateStatus: (status: UpdateStatus) => void
-  // Why: cache last-'available' changelog so the card keeps rich content while downloading; cleared on idle/checking to avoid staleness.
-  updateChangelog: ChangelogData | null
-  // Why: UpdateCard is lazy-loaded and may miss the transient checking status; hold manual-check intent until a terminal state consumes it.
-  updateUserInitiatedCycle: boolean
-  dismissedUpdateVersion: string | null
-  dismissUpdate: (versionOverride?: string) => void
-  clearDismissedUpdateVersion: () => void
   /** Version when the sign-out notice was seen or dismissed; null = unseen. */
   dismissedUnexpectedSignoutVersion: string | null
   unexpectedSignoutDismissedVersions: string[]
   dismissUnexpectedSignoutCard: (version: string) => void
-  /** Dev-only channel override; null follows the running build's own channel. */
-  releaseChannelOverride: ReleaseChannel | null
-  setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
-  // Ephemeral disclosure state; setUpdateStatus initializes it when the phase or error actionability changes.
-  updateCardCollapsed: boolean
-  setUpdateCardCollapsed: (collapsed: boolean) => void
-  updateReassuranceSeen: boolean
-  markUpdateReassuranceSeen: () => void
   /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
   osc52ClipboardDefaultOnNoticePending: boolean
   clearOsc52ClipboardDefaultOnNotice: () => void

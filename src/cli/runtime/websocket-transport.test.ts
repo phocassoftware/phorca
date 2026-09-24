@@ -98,12 +98,7 @@ describe('CLI remote WebSocket transport', () => {
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
     const runtime = await startTestRuntime('runtime-ws-2', {
       appVersion: '1.5.0',
-      remoteUpdateSupport: {
-        installMode: 'unsupported-headless-serve',
-        automatic: false,
-        reason: 'manual-service-update-required'
-      },
-      capabilities: ['updater.remote-control.v1'],
+      capabilities: [],
       degradations: [
         {
           code: 'browser_unavailable',
@@ -132,8 +127,6 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
     expect(status.result.runtime).toMatchObject({
       appVersion: '1.5.0',
-      remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
-      capabilities: ['updater.remote-control.v1'],
       degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
   })
@@ -258,11 +251,6 @@ async function startTestRuntime(
     minCompatibleRuntimeClientVersion?: number
     desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
     appVersion?: string
-    remoteUpdateSupport?: {
-      installMode: 'unsupported-headless-serve'
-      automatic: false
-      reason: 'manual-service-update-required'
-    }
     capabilities?: string[]
     degradations?: RuntimeStatus['degradations']
   } = {}
@@ -335,7 +323,6 @@ async function startTestRuntime(
                   statusOverrides.minCompatibleRuntimeClientVersion ??
                   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
                 appVersion: statusOverrides.appVersion,
-                remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
                 capabilities: statusOverrides.capabilities,
                 degradations: statusOverrides.degradations
               },

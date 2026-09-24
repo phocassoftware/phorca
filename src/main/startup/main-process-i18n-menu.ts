@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { ensureMainI18n, setMainUiLanguage } from '../i18n/main-i18n'
 import {
   registerAppMenu,
@@ -10,12 +10,11 @@ import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store
 import { mainProcessState as state } from './main-process-state'
 import {
   openSettingsFromSystemMenu,
-  runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
   sendOpenSetupGuide
 } from './main-window-actions'
-import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
+import { openReleasesPage } from '../releases-page'
 import { logStartupMilestone } from './startup-diagnostics'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
@@ -27,10 +26,8 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
   registerAppMenu({
-    appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
-    onCheckForUpdates: (options) => {
-      ensureAutoUpdaterConfigured()
-      runUserInitiatedUpdateCheck(options)
+    onCheckForUpdates: () => {
+      void openReleasesPage()
     },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (state.mainWindow?.webContents.id === webContentsId) {

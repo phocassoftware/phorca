@@ -93,8 +93,6 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'ui.onToggleStatusBar',
   'ui.onToggleWorktreePalette',
   'ui.onWorktreeHistoryNavigate',
-  'updater.onClearDismissal',
-  'updater.onStatus',
   'workspaceSpace.onProgress',
   'worktrees.onBaseStatus',
   'worktrees.onChanged',
@@ -158,8 +156,6 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onTerminalTabCloseRequest',
   'ui.onSleepWorktree',
   'ui.onResumeSleepingAgents',
-  'updater.onStatus',
-  'updater.onClearDismissal',
   'ui.onFullscreenChanged',
   'browser.onGuestLoadFailed',
   'browser.onCertificateFailureChanged',
@@ -245,11 +241,9 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     const cleanupOrder: string[] = []
     const listeners = new Map<string, ListenerRecord[]>()
     const storeSubscriptions: { active: boolean; cleanup: Mock }[] = []
-    const setUpdateStatus = vi.fn()
     const storeState = new Proxy(
       createHarnessStoreState({
         tabsByWorktree: { 'wt-1': [] },
-        setUpdateStatus,
         workspaceSessionReady: true,
         runtimeEnvironments: [{ id: 'runtime-1' }],
         runtimeStatusByEnvironmentId: new Map([['runtime-1', { status: 'connected' }]])
@@ -403,21 +397,6 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ])
     expect(
       groupOrder([
-        'updater.getStatus',
-        'updater.onStatus',
-        'updater.onClearDismissal',
-        'rateLimits.onUpdate',
-        'rateLimits.get'
-      ])
-    ).toEqual([
-      'updater.getStatus',
-      'updater.onStatus',
-      'updater.onClearDismissal',
-      'rateLimits.onUpdate',
-      'rateLimits.get'
-    ])
-    expect(
-      groupOrder([
         'agentStatus.onSet',
         'agentStatus.onClear',
         'agentStatus.onMigrationUnsupported',
@@ -498,13 +477,6 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       )
     ).toBe(true)
 
-    const statusWritesBeforePostUnmountEvent = setUpdateStatus.mock.calls.length
-    for (const record of listeners.get('updater.onStatus') ?? []) {
-      if (record.active) {
-        record.callback({ state: 'available' })
-      }
-    }
-    expect(setUpdateStatus).toHaveBeenCalledTimes(statusWritesBeforePostUnmountEvent)
 
     const secondCleanup = installAppLifetimeIpcEvents(recordCleanupPhase)
     expect(

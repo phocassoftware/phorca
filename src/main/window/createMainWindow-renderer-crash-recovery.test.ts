@@ -428,7 +428,6 @@ describe('createMainWindow', () => {
             reason: details.reason,
             expectedTeardown: resolveExpectedTeardownScope({
               isQuitting: false,
-              isQuittingForUpdate: false,
               isExpectedRendererReload: false,
               includeSystemSessionEnd: false
             })

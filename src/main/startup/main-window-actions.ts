@@ -1,16 +1,14 @@
 import { app, clipboard, dialog, type BrowserWindow, type Tray } from 'electron'
-import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater'
 import {
   createSystemTray,
   setMacMenuBarIconVisible,
   type SystemTrayOptions
 } from '../tray/system-tray'
-import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
+import { openReleasesPage } from '../releases-page'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
@@ -46,9 +44,7 @@ export function showMainWindowFromTray(): void {
     safelyRevealWindow(state.mainWindow)
     return
   }
-  if (!isQuittingForUpdate()) {
-    openWindow()
-  }
+  openWindow()
 }
 
 export function openSettingsFromSystemMenu(): void {
@@ -70,10 +66,6 @@ export function quitFromSystemTray(): void {
   app.quit()
 }
 
-export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
-  ensureAutoUpdaterConfigured()
-  checkForUpdatesFromMenu(options)
-}
 
 export function getSystemTrayOptions(): SystemTrayOptions | null {
   const store = state.store
@@ -87,8 +79,7 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
     onOpen: showMainWindowFromTray,
     onOpenSettings: openSettingsFromSystemMenu,
     onCheckForUpdates: () => {
-      showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
+      void openReleasesPage()
     },
     onQuit: quitFromSystemTray
   }

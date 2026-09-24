@@ -84,6 +84,7 @@ export type RuntimeStatus = {
    * degradation reporting, not that the host proved every optional feature available.
    */
   degradations?: RuntimeDegradation[]
+  appVersion?: string
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
   terminalWindowsShell?: string | null
@@ -114,6 +115,7 @@ export type CliStatusResult = {
     /** Canonical runtime transport verdict, when the caller has runtime evidence. */
     connectionState?: RuntimeHostConnectionState
     runtimeId: string | null
+    appVersion?: string
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
   }

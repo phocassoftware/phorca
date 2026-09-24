@@ -5,10 +5,10 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * The status the transport's own `status.get` reads.
  *
  * Checked against src/main/runtime/rpc/methods/status.ts, which spreads `runtime.getStatus()` and
- * adds `appVersion` and `remoteUpdateSupport`. Every member is optional, because this reply has to
- * decode from every host version the protocol gate admits and each of the four fields arrived in a
- * different release: an older host that answers none of them must still read, or the gate would
- * refuse the build it exists to evaluate.
+ * adds `appVersion`. Every member is optional because this reply has to decode from every host
+ * version the protocol gate admits, and each field arrived in a different release: an older host
+ * that answers none of them must still read, or the gate would refuse the build it exists to
+ * evaluate.
  *
  * `capabilities` is an array of strings and salvages whole rather than per element, because that
  * was main's own rule: the probe read the member off the raw reply and took the list only when

@@ -17,12 +17,12 @@ async function createPackagedNodeModulesFixture(resourcesDir) {
   const packageDir = join(resourcesDir, 'node_modules', '@linear', 'sdk')
   const distDir = join(packageDir, 'dist')
   const webhooksDir = join(packageDir, 'webhooks')
-  const updaterDir = join(resourcesDir, 'node_modules', 'electron-updater', 'out')
+  const runtimeDir = join(resourcesDir, 'node_modules', 'runtime-prunable', 'out')
   const jsYamlDir = join(resourcesDir, 'node_modules', 'js-yaml', 'dist')
   const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty', 'lib')
   await mkdir(distDir, { recursive: true })
   await mkdir(webhooksDir, { recursive: true })
-  await mkdir(updaterDir, { recursive: true })
+  await mkdir(runtimeDir, { recursive: true })
   await mkdir(jsYamlDir, { recursive: true })
   await mkdir(nodePtyDir, { recursive: true })
   await writeFile(join(packageDir, 'package.json'), LINEAR_SDK_PACKAGE_JSON, 'utf8')
@@ -43,15 +43,15 @@ async function createPackagedNodeModulesFixture(resourcesDir) {
   await writeFile(join(distDir, 'index.mjs.map'), '{}', 'utf8')
   await writeFile(join(webhooksDir, 'index.cjs'), 'module.exports = {}', 'utf8')
   await writeFile(join(webhooksDir, 'index.cjs.map'), '{}', 'utf8')
-  await writeFile(join(updaterDir, 'main.js'), 'module.exports = {}', 'utf8')
-  await writeFile(join(updaterDir, 'main.js.map'), '{}', 'utf8')
-  await writeFile(join(updaterDir, 'main.d.ts'), 'export {}', 'utf8')
-  await writeFile(join(updaterDir, 'main.d.ts.map'), '{}', 'utf8')
+  await writeFile(join(runtimeDir, 'main.js'), 'module.exports = {}', 'utf8')
+  await writeFile(join(runtimeDir, 'main.js.map'), '{}', 'utf8')
+  await writeFile(join(runtimeDir, 'main.d.ts'), 'export {}', 'utf8')
+  await writeFile(join(runtimeDir, 'main.d.ts.map'), '{}', 'utf8')
   await writeFile(join(jsYamlDir, 'js-yaml.min.js'), 'globalThis.jsyaml = {}', 'utf8')
   await writeFile(join(jsYamlDir, 'js-yaml.min.js.map'), '{}', 'utf8')
   await writeFile(join(nodePtyDir, 'index.js'), 'module.exports = {}', 'utf8')
   await writeFile(join(nodePtyDir, 'index.js.map'), '{}', 'utf8')
-  return { packageDir, distDir, webhooksDir, updaterDir, jsYamlDir, nodePtyDir }
+  return { packageDir, distDir, webhooksDir, runtimeDir, jsYamlDir, nodePtyDir }
 }
 
 describe('packaged runtime type-declaration and source-map pruning', () => {
@@ -103,11 +103,11 @@ describe('packaged runtime type-declaration and source-map pruning', () => {
   it('removes type declarations and declaration maps in the same walk', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-source-map-prune-dts-'))
     try {
-      const { updaterDir } = await createPackagedNodeModulesFixture(resourcesDir)
+      const { runtimeDir } = await createPackagedNodeModulesFixture(resourcesDir)
 
       prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
 
-      await expect(readdir(updaterDir)).resolves.toEqual(['main.js'])
+      await expect(readdir(runtimeDir)).resolves.toEqual(['main.js'])
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }
@@ -116,7 +116,7 @@ describe('packaged runtime type-declaration and source-map pruning', () => {
   it('runs the artifact prune through aggregate runtime cleanup', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-source-map-aggregate-prune-'))
     try {
-      const { distDir, updaterDir, packageDir } =
+      const { distDir, runtimeDir, packageDir } =
         await createPackagedNodeModulesFixture(resourcesDir)
 
       prunePackagedRuntimeNodeModules(resourcesDir, 'darwin', 'arm64')
@@ -126,7 +126,7 @@ describe('packaged runtime type-declaration and source-map pruning', () => {
         'index.mjs',
         'runtime-helper.cjs'
       ])
-      await expect(readdir(updaterDir)).resolves.toEqual(['main.js'])
+      await expect(readdir(runtimeDir)).resolves.toEqual(['main.js'])
       await expect(readFile(join(packageDir, 'metadata.json.map'), 'utf8')).resolves.toBe(
         '{"keep":true}'
       )

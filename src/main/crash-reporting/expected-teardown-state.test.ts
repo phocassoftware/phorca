@@ -50,7 +50,6 @@ describe('expected teardown state', () => {
     expect(
       resolveExpectedTeardownScope({
         isQuitting: false,
-        isQuittingForUpdate: false,
         isExpectedRendererReload: false
       })
     ).toBe('app-shutdown')
@@ -62,13 +61,11 @@ describe('expected teardown state', () => {
     now = 0
     const rollbackScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
     now = 3_600_001
     const catchUpScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
 
@@ -81,13 +78,11 @@ describe('expected teardown state', () => {
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
     const expiredScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
     now -= 1
     const backtrackScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
 
@@ -104,7 +99,6 @@ describe('expected teardown state', () => {
     expect(
       resolveExpectedTeardownScope({
         isQuitting: false,
-        isQuittingForUpdate: false,
         isExpectedRendererReload: false
       })
     ).toBe('app-shutdown')
@@ -115,7 +109,6 @@ describe('expected teardown state', () => {
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS - 1
     const scope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
 
@@ -128,13 +121,11 @@ describe('expected teardown state', () => {
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
     const boundaryScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
     now += 1
     const outsideScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
 
@@ -147,13 +138,11 @@ describe('expected teardown state', () => {
     markSystemSessionEnding()
     const sessionEndScope = resolveExpectedTeardownScope({
       isQuitting: false,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false,
       includeSystemSessionEnd: false
     })
     const inAppQuitScope = resolveExpectedTeardownScope({
       isQuitting: true,
-      isQuittingForUpdate: false,
       isExpectedRendererReload: false,
       includeSystemSessionEnd: false
     })
@@ -174,21 +163,14 @@ describe('expected teardown state', () => {
     ).toBe(false)
   })
 
-  it('preserves existing update and renderer-reload scopes', () => {
+  it('preserves renderer-reload scope', () => {
     expect(
       resolveExpectedTeardownScope({
         isQuitting: false,
-        isQuittingForUpdate: true,
-        isExpectedRendererReload: false
-      })
-    ).toBe('app-shutdown')
-    expect(
-      resolveExpectedTeardownScope({
-        isQuitting: false,
-        isQuittingForUpdate: false,
         isExpectedRendererReload: true,
         includeSystemSessionEnd: false
       })
     ).toBe('renderer-reload')
   })
+
 })

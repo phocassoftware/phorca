@@ -88,19 +88,6 @@ describe('deriving what was working at teardown', () => {
     ])
   })
 
-  it('carries the update trigger so the surface can say the restart was not the user choice', () => {
-    const [recorded] = structuredAgentSessionsWorkingAtTeardown({
-      sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
-      ]),
-      getRecord: () => record(),
-      trigger: 'update',
-      teardownId: TEARDOWN_CURRENT,
-      now: NOW
-    })
-
-    expect(recorded?.trigger).toBe('update')
-  })
 
   it('marks nothing for an idle session', () => {
     expect(

@@ -1,7 +1,6 @@
 import { resolveExpectedTeardownScope } from '../crash-reporting/expected-teardown-state'
 import type { ExpectedTeardownScope } from '../crash-reporting/process-gone-classification'
 import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from '../crash-reporting/process-gone-recorder'
-import { isQuittingForUpdate } from '../updater'
 import { mainProcessState as state } from './main-process-state'
 
 export function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
@@ -18,7 +17,6 @@ export function getExpectedTeardownScope(
 ): ExpectedTeardownScope {
   return resolveExpectedTeardownScope({
     isQuitting: state.isQuitting,
-    isQuittingForUpdate: isQuittingForUpdate(),
     isExpectedRendererReload:
       webContentsId !== undefined && state.expectedRendererReload.matches(webContentsId),
     includeSystemSessionEnd

@@ -52,7 +52,6 @@ const rendererKill = event()
 function currentTeardownScope() {
   return resolveExpectedTeardownScope({
     isQuitting: false,
-    isQuittingForUpdate: false,
     isExpectedRendererReload: false
   })
 }

@@ -114,7 +114,6 @@ describe('createMainWindow', () => {
       expect(
         resolveExpectedTeardownScope({
           isQuitting: false,
-          isQuittingForUpdate: false,
           isExpectedRendererReload: false
         })
       ).toBe('app-shutdown')
@@ -152,7 +151,6 @@ describe('createMainWindow', () => {
         expect(
           resolveExpectedTeardownScope({
             isQuitting: false,
-            isQuittingForUpdate: false,
             isExpectedRendererReload: false
           })
         ).toBe('none')

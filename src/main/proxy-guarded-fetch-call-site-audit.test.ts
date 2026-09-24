@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 // can escape that fence, both audited here:
 //   1. a `net.fetch` / `net.request` that names another `session` or `partition`
 //   2. a `<session>.fetch(` on a `session.fromPartition(...)` session
-// Known pre-existing gap outside this repo's reach: electron-updater runs on its own partition.
 //
 // Rule 2 entries map a file to its expected number of non-`net` `.fetch(` calls. A count change
 // means a call site was added, removed, or moved: re-audit the file and update the count.

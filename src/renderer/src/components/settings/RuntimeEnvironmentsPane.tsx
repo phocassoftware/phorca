@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
@@ -62,13 +61,6 @@ export function RuntimeEnvironmentsPane({
   const [shareServerFormOpen, setShareServerFormOpen] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [workflow, setWorkflow] = useState<RemoteServerWorkflow>('connect')
-  const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
-  const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
-  const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
-  const refreshRemoteServerUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
-  const setRemoteServerUpdateDialogOpen = useAppStore(
-    (state) => state.setRemoteServerUpdateDialogOpen
-  )
   const consumedAddServerIntentSignalRef = useRef(0)
   const {
     environments,
@@ -128,10 +120,6 @@ export function RuntimeEnvironmentsPane({
     connectEnvironment
   })
 
-  const environmentIdsKey = environments.map((environment) => environment.id).join('\n')
-  useEffect(() => {
-    void refreshRemoteServerUpdates()
-  }, [environmentIdsKey, refreshRemoteServerUpdates])
   useEffect(() => {
     if (
       !addServerIntentSignal ||
@@ -213,9 +201,6 @@ export function RuntimeEnvironmentsPane({
         pairingCode={pairingCode}
         addServerFailure={addServerFailure}
         isBusy={isBusy}
-        remoteServerUpdates={remoteServerUpdates}
-        remoteServerUpdatesChecking={remoteServerUpdatesChecking}
-        remoteServerUpdatesRunning={remoteServerUpdatesRunning}
         connectingId={connectingId}
         switchingValue={switchingValue}
         disconnectingId={disconnectingId}
@@ -228,8 +213,6 @@ export function RuntimeEnvironmentsPane({
           setAddServerFailure(null)
         }}
         onAddEnvironment={(allowLoopback) => void addEnvironment(allowLoopback)}
-        onOpenUpdateDialog={() => setRemoteServerUpdateDialogOpen(true)}
-        refreshRemoteServerUpdates={refreshRemoteServerUpdates}
         onConnect={(environment) => void connectEnvironment(environment)}
         onDisconnect={(environment) => void disconnectEnvironment(environment)}
         onRemove={openRemoveDialog}

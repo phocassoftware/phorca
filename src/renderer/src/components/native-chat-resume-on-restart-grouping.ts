@@ -1,4 +1,5 @@
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session-record'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
@@ -16,7 +17,7 @@ export type ResumeCandidate = {
   sessionId: string
   workspaceId: string
   agent: 'claude' | 'codex'
-  trigger: 'quit' | 'update'
+  trigger: AgentSessionResumeTrigger
   latestPrompt: string
   recordedAt: number
   /** Optional on the wire: an older host omits them, and a row must still render. */

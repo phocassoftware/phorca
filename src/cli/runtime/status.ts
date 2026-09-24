@@ -58,6 +58,7 @@ export async function getCliStatus(
           status: response.result
         }),
         runtimeId: response.result.runtimeId,
+        ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
         ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
         ...(response.result.degradations ? { degradations: response.result.degradations } : {})
       },

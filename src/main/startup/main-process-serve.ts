@@ -2,8 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
-// Why local (was shared/serve-update-handoff.ts): that update-handoff protocol is gone;
-// this best-effort readiness ping to an optional parent process (e.g. a supervising
+// Why local: this best-effort readiness ping to an optional parent process (e.g. a supervising
 // script) is the only piece worth keeping, so it lives directly at its sole call site.
 import { mainProcessState as state } from './main-process-state'
 import { getServeOptions, type ServeOptions } from './serve-options'

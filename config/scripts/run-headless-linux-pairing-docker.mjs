@@ -207,17 +207,8 @@ async function validateAuthenticatedPairing() {
     typeof statusResult?.runtime?.appVersion === 'string',
     'paired server did not report its Orca app version'
   )
-  assert(
-    statusResult?.runtime?.capabilities?.includes('updater.remote-control.v1'),
-    'paired server did not advertise remote updater capability'
-  )
-  assert(
-    statusResult?.runtime?.remoteUpdateSupport?.automatic === false &&
-      statusResult.runtime.remoteUpdateSupport.reason === 'manual-service-update-required',
-    'direct headless server did not require a safe manual service update'
-  )
   stopContainer(server.name)
-  console.log('PASS paired E2EE updater inventory and manual-service fallback')
+  console.log('PASS paired E2EE status')
 }
 
 async function validateUnreachableOffer() {

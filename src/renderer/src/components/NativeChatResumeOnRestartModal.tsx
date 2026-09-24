@@ -118,7 +118,6 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     return null
   }
 
-  const interruptedByUpdate = candidates.some((candidate) => candidate.trigger === 'update')
 
   return (
     <Dialog
@@ -144,15 +143,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             </span>
           </DialogTitle>
           <DialogDescription>
-            {interruptedByUpdate
-              ? translate(
-                  'auto.components.NativeChatResumeOnRestartModal.updateBody',
-                  'These chats were mid-turn when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check its last action before carrying on. Your own prompt is not re-sent.'
-                )
-              : translate(
-                  'auto.components.NativeChatResumeOnRestartModal.body',
-                  'These chats were mid-turn when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check its last action before carrying on. Your own prompt is not re-sent.'
-                )}
+            {translate(
+              'auto.components.NativeChatResumeOnRestartModal.body',
+              'These chats were mid-turn when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check its last action before carrying on. Your own prompt is not re-sent.'
+            )}
           </DialogDescription>
         </DialogHeader>
 

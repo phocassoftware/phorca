@@ -68,14 +68,11 @@ function renderRow(): void {
       environment={environment}
       details={undefined}
       isActive={false}
-      remoteUpdate={undefined}
-      remoteServerUpdatesRunning={false}
       connecting={false}
       switching={false}
       disconnecting={false}
       removing={false}
       isBusy={false}
-      onOpenUpdate={vi.fn()}
       onDisconnect={vi.fn()}
       onConnect={vi.fn()}
       onRemove={vi.fn()}

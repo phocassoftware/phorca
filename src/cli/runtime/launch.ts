@@ -4,20 +4,10 @@ import { dirname, join, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { runProcessSync } from '../../shared/child-process/run-process'
 import {
-  SERVE_UPDATE_HANDOFF_PATH_ENV,
-  getServeUpdateHandoffPath
-} from '../../shared/serve-update-handoff'
-import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
 } from '../../shared/ephemeral-vm-recipes'
-import { getDefaultUserDataPath } from './metadata'
-import { getMacAppBundlePath } from './mac-app-update-bundle'
-import {
-  readServeUpdateHandoffSync,
-  resumeInterruptedServeUpdate,
-  superviseForegroundServe
-} from './serve-update-supervisor'
+import { superviseForegroundServe } from './serve-foreground-supervisor'
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
@@ -77,6 +67,14 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
+function getMacAppBundlePath(executable: string): string | null {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+  const appBundlePath = dirname(dirname(dirname(executable)))
+  return appBundlePath.endsWith('.app') ? appBundlePath : null
+}
+
 export function serveOrcaApp(
   args: {
     json?: boolean
@@ -116,52 +114,20 @@ export function serveOrcaApp(
     childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
   }
 
-  const handoffPath =
-    args.recipeJson !== true && getMacAppBundlePath(executable)
-      ? getServeUpdateHandoffPath(getDefaultUserDataPath())
-      : null
   const childEnv = stripElectronRunAsNode(process.env)
-  if (handoffPath) {
-    childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
-  }
   const spawnOptions: SpawnOptions = {
     detached: args.recipeJson === true,
     cwd: resolveAppRoot(),
-    stdio:
-      args.recipeJson === true
-        ? ['ignore', 'pipe', 'inherit']
-        : handoffPath
-          ? ['inherit', 'inherit', 'inherit', 'ipc']
-          : 'inherit',
+    stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     ...getExecutableSpawnOptions(executable),
     env: childEnv
-  }
-  const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
-  if (interruptedHandoff?.phase === 'install-requested') {
-    // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
-    return resumeInterruptedServeUpdate({
-      executable,
-      childArgs,
-      spawnOptions,
-      spawnChild: spawnProcess,
-      handoffPath: handoffPath!,
-      handoff: interruptedHandoff
-    })
   }
   const child = spawnProcess(executable, childArgs, spawnOptions)
 
   if (args.recipeJson) {
     return waitForRecipeJson(child)
   }
-  return superviseForegroundServe({
-    executable,
-    childArgs,
-    spawnOptions,
-    spawnChild: spawnProcess,
-    child,
-    handoffPath,
-    expectedHandoff: null
-  })
+  return superviseForegroundServe(child)
 }
 
 function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<number> {

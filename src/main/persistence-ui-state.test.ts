@@ -85,7 +85,6 @@ describe('Store', () => {
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(400)
     expect(ui.groupBy).toBe('repo') // default preserved
-    expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
   it('round-trips and normalizes the host-qualified manual repo order', async () => {
@@ -662,13 +661,6 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
-  it('persists updater reminder metadata in UI state', async () => {
-    const store = await createStore()
-    store.updateUI({ dismissedUpdateVersion: '1.0.99', lastUpdateCheckAt: 1234 })
-    const ui = store.getUI()
-    expect(ui.dismissedUpdateVersion).toBe('1.0.99')
-    expect(ui.lastUpdateCheckAt).toBe(1234)
-  })
 
   it('normalizes default browser zoom UI writes', async () => {
     const store = await createStore()

@@ -1,4 +1,3 @@
-import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
@@ -124,18 +123,10 @@ export type PersistedUIState = {
   usagePercentageDisplay?: UsagePercentageDisplay
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
-  dismissedUpdateVersion: string | null
   /** Version when the sign-out notice was seen or dismissed; any value suppresses future appearances. */
   dismissedUnexpectedSignoutVersion?: string | null
-  lastUpdateCheckAt: number | null
-  /** Dev-only update channel override; absent means the build's own channel. */
-  releaseChannelOverride?: ReleaseChannel | null
-  pendingUpdateNudgeId?: string | null
-  dismissedUpdateNudgeId?: string | null
   /** Whether Orca already tried triggering the macOS notification permission dialog; prevents re-firing every launch. */
   notificationPermissionRequested?: boolean
-  /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
-  updateReassuranceSeen?: boolean
   /** Per-paneKey "row visited" timestamps that mute seen inline-agent rows; persisted because rows survive restart, else acked rows return bold. Renderer-owned via ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** Per-paneKey "Clear completed" cutoffs hiding activity events stamped at or before the cutoff; persisted so cleared rows stay cleared across restart. Renderer-owned via ui:set. */

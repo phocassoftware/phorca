@@ -32,7 +32,7 @@ const candidates: ResumeCandidate[] = [
     sessionId: 'b',
     workspaceId: 'workspace',
     agent: 'claude',
-    trigger: 'update',
+    trigger: 'quit',
     latestPrompt: 'Review it',
     recordedAt: 2
   }

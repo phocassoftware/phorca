@@ -37,7 +37,6 @@ import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-per
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
-import { isReleaseChannel } from '../../../../../shared/release-channel'
 import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
@@ -226,15 +225,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             }
             return DEFAULT_PET_ID
           })(),
-          dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
           ...hydrateUnexpectedSignoutDismissal(s, ui.dismissedUnexpectedSignoutVersion),
-          // Why: a persisted value from a build that knew a different channel set
-          // would otherwise survive as-is; activeChannel only falls back on null,
-          // so an unknown string reaches listBuilds and the segmented control.
-          releaseChannelOverride: isReleaseChannel(ui.releaseChannelOverride)
-            ? ui.releaseChannelOverride
-            : null,
-          updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
           osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
           browserDefaultUrl: ui.browserDefaultUrl ?? null,
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,

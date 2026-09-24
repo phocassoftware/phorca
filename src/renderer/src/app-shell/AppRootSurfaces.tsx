@@ -16,7 +16,6 @@ import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchS
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
-import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
 import {
   selectAppRootSurfacePetEnabled,
@@ -57,16 +56,10 @@ const SshPassphraseDialog = lazy(() =>
     default: module.SshPassphraseDialog
   }))
 )
-const UpdateCard = lazy(() =>
-  import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
-)
 const UnexpectedSignoutCard = lazy(() =>
   import('../components/UnexpectedSignoutCard').then((module) => ({
     default: module.UnexpectedSignoutCard
   }))
-)
-const RemoteServerUpdateDialog = lazy(
-  () => import('../components/settings/RemoteServerUpdateDialog')
 )
 const ContextualTourOverlay = lazy(() =>
   import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({
@@ -112,15 +105,6 @@ function OverlayBoundary({ children, ...props }: BoundaryProps): React.JSX.Eleme
   )
 }
 
-function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
-  if (status.state === 'idle') {
-    return false
-  }
-  if (status.state === 'checking' || status.state === 'not-available') {
-    return status.userInitiated === true
-  }
-  return true
-}
 
 /**
  * Every overlay and modal hosted at the App root, in a fixed sibling order so stacking stays
@@ -143,12 +127,10 @@ export function AppRootSurfaces(props: {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const petVisible = useAppStore((s) => s.petVisible)
   const dictationState = useAppStore((s) => s.dictationState)
-  const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
 
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
-  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
@@ -281,13 +263,6 @@ export function AppRootSurfaces(props: {
         </Suspense>
       ) : null}
       <NotificationCardStack>
-        {shouldMountUpdateCard ? (
-          <Suspense fallback={null}>
-            <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
-              <UpdateCard />
-            </OverlayBoundary>
-          </Suspense>
-        ) : null}
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.unexpected-signout" resetKey={activeView}>
             <UnexpectedSignoutCard />
@@ -379,11 +354,6 @@ export function AppRootSurfaces(props: {
       <OverlayBoundary boundaryId="overlay.skill-freshness-update-dialog">
         <SkillFreshnessUpdateDialog />
       </OverlayBoundary>
-      <Suspense fallback={null}>
-        <OverlayBoundary boundaryId="overlay.remote-server-update-dialog">
-          <RemoteServerUpdateDialog />
-        </OverlayBoundary>
-      </Suspense>
     </>
   )
 }

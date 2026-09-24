@@ -1,10 +1,7 @@
-import { Loader2, Plus, RefreshCw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { Button } from '../ui/button'
 import type { RuntimeHostDetails } from './runtime-environment-host-details'
 import { RuntimeHostAccessForm, type RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
@@ -20,9 +17,6 @@ type RuntimeServersConnectSectionProps = {
   pairingCode: string
   addServerFailure: RuntimeHostAccessFailure | null
   isBusy: boolean
-  remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
-  remoteServerUpdatesChecking: boolean
-  remoteServerUpdatesRunning: boolean
   connectingId: string | null
   switchingValue: string | null
   disconnectingId: string | null
@@ -32,8 +26,6 @@ type RuntimeServersConnectSectionProps = {
   onNameChange: (value: string) => void
   onPairingCodeChange: (value: string) => void
   onAddEnvironment: (allowLoopback: boolean) => void
-  onOpenUpdateDialog: () => void
-  refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
@@ -49,9 +41,6 @@ export function RuntimeServersConnectSection({
   pairingCode,
   addServerFailure,
   isBusy,
-  remoteServerUpdates,
-  remoteServerUpdatesChecking,
-  remoteServerUpdatesRunning,
   connectingId,
   switchingValue,
   disconnectingId,
@@ -61,80 +50,29 @@ export function RuntimeServersConnectSection({
   onNameChange,
   onPairingCodeChange,
   onAddEnvironment,
-  onOpenUpdateDialog,
-  refreshRemoteServerUpdates,
   onConnect,
   onDisconnect,
   onRemove
 }: RuntimeServersConnectSectionProps): React.JSX.Element {
-  const updateCheckHint = getUpdateCheckHint()
   return (
     <div className={cn('space-y-3', !visible && 'hidden')}>
-      <div
-        data-settings-section="remote-server-updates"
-        className="flex items-center justify-between gap-3"
-      >
-        <div className="min-w-0 space-y-0.5">
-          <div className="text-sm font-medium">
+      <div className="flex items-center justify-end">
+        {addServerFormOpen ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={onOpenAddServerForm}
+            disabled={isBusy}
+          >
+            <Plus />
             {translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.connectToRemoteServers',
-              'Connect to remote servers'
+              'auto.components.settings.RuntimeEnvironmentsPane.9bee6bbeeb',
+              'Add Server'
             )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.RuntimeEnvironmentsPane.connectToRemoteServersHelp',
-              'Pair another Orca runtime, then connect or disconnect it here.'
-            )}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {environments.length > 0 ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              title={updateCheckHint}
-              onClick={(event) => {
-                onOpenUpdateDialog()
-                void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
-              }}
-              disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
-            >
-              {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <RefreshCw />
-              )}
-              {remoteServerUpdatesRunning
-                ? translate(
-                    'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
-                    'Updating servers…'
-                  )
-                : translate(
-                    'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                    'Check for Server Updates'
-                  )}
-            </Button>
-          ) : null}
-          {addServerFormOpen ? null : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={onOpenAddServerForm}
-              disabled={isBusy}
-            >
-              <Plus />
-              {translate(
-                'auto.components.settings.RuntimeEnvironmentsPane.9bee6bbeeb',
-                'Add Server'
-              )}
-            </Button>
-          )}
-        </div>
+          </Button>
+        )}
       </div>
 
       {addServerFormOpen ? (
@@ -166,14 +104,11 @@ export function RuntimeServersConnectSection({
                 environment={environment}
                 details={detailsByEnvironmentId[environment.id]}
                 isActive={activeRuntimeEnvironmentId === environment.id}
-                remoteUpdate={remoteServerUpdates.get(environment.id)}
-                remoteServerUpdatesRunning={remoteServerUpdatesRunning}
                 connecting={connectingId === environment.id}
                 switching={switchingValue === environment.id}
                 disconnecting={disconnectingId === environment.id}
                 removing={removingId === environment.id}
                 isBusy={isBusy}
-                onOpenUpdate={onOpenUpdateDialog}
                 onConnect={onConnect}
                 onDisconnect={onDisconnect}
                 onRemove={onRemove}
