@@ -110,7 +110,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+  setupAutoUpdater(
+    mainWindow: BrowserWindow,
+    opts?: UpdaterSetupOptions,
+    suppressDesktopUpdates = false
+  ): void {
     this.mainWindowRef = mainWindow
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
@@ -204,7 +208,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
       sendStatus: (status) => this.sendStatus(status),
-      scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
+      scheduleAutomaticUpdateCheck: (delayMs) => {
+        if (!suppressDesktopUpdates) {
+          this.scheduleAutomaticUpdateCheck(delayMs)
+        }
+      },
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>
         this.shouldSuppressMissingManifestPrereleaseFallbackEvent(message, error),
       suppressMissingManifestPrereleaseFallbackPromiseFailure: (message) =>
@@ -219,6 +227,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.userInitiatedCheck = value
       }
     })
+    if (suppressDesktopUpdates) {
+      return
+    }
 
     void this.checkForUpdateNudge()
     this.scheduleUpdateNudgeCheck()
