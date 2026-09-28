@@ -316,6 +316,14 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
+    if (context.electronPlatformName === 'win32') {
+      const executableName = `${context.packager.appInfo.productFilename}.exe`
+      const executablePath = join(context.appOutDir, executableName)
+      if (!existsSync(executablePath)) {
+        throw new Error(`Missing packaged Windows executable: ${executablePath}`)
+      }
+      writeFileSync(join(resourcesDir, 'app-executable-name.txt'), `${executableName}\n`)
+    }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
       const architecture = architectureByEnum[context.arch]

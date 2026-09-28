@@ -33,10 +33,10 @@ function removeFixtureTree(path) {
   }
 }
 // Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
-// keep the larger allowance scoped to the real compiler integration test.
-function itWindows(name, test) {
+// a newly named PE can also spend one cold run under endpoint inspection.
+function itWindows(name, test, timeout = 15_000) {
   const runner = process.platform === 'win32' ? it : it.skip
-  runner(name, { timeout: 15_000 }, test)
+  runner(name, { timeout }, test)
 }
 
 describe('Windows CLI launcher', () => {
@@ -106,7 +106,8 @@ describe('Windows CLI launcher', () => {
       const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
       mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
-      copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      copyFileSync(process.execPath, join(appRoot, 'Phorca.exe'))
+      writeFileSync(join(resourcesPath, 'app-executable-name.txt'), 'Phorca.exe\n', 'utf8')
       writeFileSync(
         cliPath,
         `process.stdout.write(JSON.stringify({
@@ -155,7 +156,7 @@ describe('Windows CLI launcher', () => {
     } finally {
       removeFixtureTree(appRoot)
     }
-  })
+  }, 60_000)
 
   itWindows('survives an inherited environment block containing PATH and Path', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca duplicate path launcher '))
@@ -175,6 +176,7 @@ describe('Windows CLI launcher', () => {
       mkdirSync(dirname(launcherPath), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
       copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      writeFileSync(join(resourcesPath, 'app-executable-name.txt'), 'Orca.exe\n', 'utf8')
       writeFileSync(
         cliPath,
         `require('node:fs').writeFileSync(process.env.ORCA_TEST_OUTPUT, JSON.stringify({
