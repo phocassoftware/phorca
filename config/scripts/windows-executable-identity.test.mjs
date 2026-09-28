@@ -29,13 +29,13 @@ async function makeFixture(executableName) {
 }
 
 describe('Windows packaged executable identity', () => {
-  it('uses win.executableName when it differs from productName', async () => {
+  it('uses electron-builder resolved productFilename', async () => {
     const fixture = await makeFixture('Phorca.exe')
     const executableName = writeWindowsExecutableIdentity({
       ...fixture,
       packager: {
-        appInfo: { productFilename: 'Orca' },
-        platformSpecificBuildOptions: { executableName: 'Phorca' }
+        appInfo: { productFilename: 'Phorca' },
+        platformSpecificBuildOptions: { executableName: 'Phorca / Internal' }
       }
     })
 
@@ -45,7 +45,7 @@ describe('Windows packaged executable identity', () => {
     ).resolves.toBe('Phorca.exe\n')
   })
 
-  it('falls back to productFilename for ordinary builds', async () => {
+  it('uses productFilename for ordinary builds', async () => {
     const fixture = await makeFixture('Orca.exe')
 
     expect(
@@ -56,14 +56,14 @@ describe('Windows packaged executable identity', () => {
     ).toBe('Orca.exe')
   })
 
-  it('fails closed when the configured executable is absent', async () => {
+  it('fails closed when the resolved executable is absent', async () => {
     const fixture = await makeFixture('Orca.exe')
 
     expect(() =>
       writeWindowsExecutableIdentity({
         ...fixture,
         packager: {
-          appInfo: { productFilename: 'Orca' },
+          appInfo: { productFilename: 'Phorca' },
           platformSpecificBuildOptions: { executableName: 'Phorca' }
         }
       })
@@ -73,8 +73,8 @@ describe('Windows packaged executable identity', () => {
   it('normalizes an explicit exe suffix without duplicating it', () => {
     expect(
       resolveWindowsExecutableName({
-        appInfo: { productFilename: 'Orca' },
-        platformSpecificBuildOptions: { executableName: 'Phorca.exe' }
+        appInfo: { productFilename: 'Phorca.exe' },
+        platformSpecificBuildOptions: { executableName: 'ignored.exe' }
       })
     ).toBe('Phorca.exe')
   })

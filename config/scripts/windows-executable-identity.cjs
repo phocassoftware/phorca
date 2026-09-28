@@ -10,13 +10,8 @@ function appendExeExtension(value, description) {
 }
 
 function resolveWindowsExecutableName(packager) {
-  const configuredName = packager?.platformSpecificBuildOptions?.executableName
-  return appendExeExtension(
-    typeof configuredName === 'string' && configuredName.trim() !== ''
-      ? configuredName
-      : packager?.appInfo?.productFilename,
-    'name'
-  )
+  // appInfo.productFilename has already folded in win.executableName and sanitized it for disk.
+  return appendExeExtension(packager?.appInfo?.productFilename, 'name')
 }
 
 function writeWindowsExecutableIdentity({ appOutDir, resourcesDir, packager }) {

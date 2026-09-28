@@ -1,14 +1,14 @@
 # Windows daemon-host relocation
 
 On Windows the terminal daemon does not run from the install directory. Before it forks the
-daemon, Orca materializes a trimmed copy of its own runtime under
-`%LOCALAPPDATA%\Orca\daemon-host\<app version>\` and forks the daemon from there
+daemon, the app materializes a trimmed copy of its own runtime under
+`%LOCALAPPDATA%\<executable basename>\daemon-host\<app version>\` and forks the daemon from there
 (`src/main/daemon/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
 auto-update and across a crash of the main process.
 
-The LOCALAPPDATA root deliberately remains `Orca` across executable branding. A private POC
-therefore runs its relocated host as
-`%LOCALAPPDATA%\Orca\daemon-host\<app version>\Phorca.exe`; the file name still follows
+The executable basename scopes rebranded builds away from one another. Upstream Orca runs its
+relocated host as `%LOCALAPPDATA%\Orca\daemon-host\<app version>\Orca.exe`; the private POC uses
+`%LOCALAPPDATA%\Phorca\daemon-host\<app version>\Phorca.exe`. The copied file name still follows
 `process.execPath` byte-for-byte.
 
 Read this before changing the copy plan, the host exe name, the LOCALAPPDATA layout, or
@@ -102,8 +102,8 @@ stop being scored.
   `${isUpdated}` guard must stay: electron-builder runs the uninstaller during every update's
   `uninstallOldVersion`, and killing the daemon there defeats the whole feature. The legacy
   `orca-terminal-daemon.exe` name stays in the macro to reap hosts left by older builds.
-- `LOCAL_HOST_ROOT_NAME` in `daemon-host-relocation.ts` and the path in the uninstall macro are the
-  same directory. Change both together.
+- The LOCALAPPDATA root follows the packaged executable basename. The uninstall macro uses
+  electron-builder's resolved and sanitized `${PRODUCT_FILENAME}` for the same directory.
 
 ## Verifying a change
 
