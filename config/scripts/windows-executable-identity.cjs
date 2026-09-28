@@ -10,13 +10,9 @@ function appendExeExtension(value, description) {
 }
 
 function resolveWindowsExecutableName(packager) {
-  const configuredName = packager?.platformSpecificBuildOptions?.executableName
-  return appendExeExtension(
-    typeof configuredName === 'string' && configuredName.trim() !== ''
-      ? configuredName
-      : packager?.appInfo?.productFilename,
-    'name'
-  )
+  // appInfo.productFilename is electron-builder's resolved, filesystem-safe executable basename.
+  // Reading the raw win.executableName would disagree with the emitted file when sanitization applies.
+  return appendExeExtension(packager?.appInfo?.productFilename, 'name')
 }
 
 function writeWindowsExecutableIdentity({ appOutDir, resourcesDir, packager }) {
