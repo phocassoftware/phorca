@@ -1,6 +1,7 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
+const { writeWindowsExecutableIdentity } = require('./scripts/windows-executable-identity.cjs')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -317,12 +318,11 @@ module.exports = {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
     if (context.electronPlatformName === 'win32') {
-      const executableName = `${context.packager.appInfo.productFilename}.exe`
-      const executablePath = join(context.appOutDir, executableName)
-      if (!existsSync(executablePath)) {
-        throw new Error(`Missing packaged Windows executable: ${executablePath}`)
-      }
-      writeFileSync(join(resourcesDir, 'app-executable-name.txt'), `${executableName}\n`)
+      writeWindowsExecutableIdentity({
+        appOutDir: context.appOutDir,
+        resourcesDir,
+        packager: context.packager
+      })
     }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
