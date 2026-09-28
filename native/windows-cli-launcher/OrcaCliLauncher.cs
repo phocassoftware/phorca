@@ -12,7 +12,7 @@ internal static class OrcaCliLauncher
             string launcherDirectory = Path.GetDirectoryName(typeof(OrcaCliLauncher).Assembly.Location);
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
-            string electronPath = Path.Combine(appDirectory, "Orca.exe");
+            string electronPath = ResolveElectronPath(appDirectory, resourcesDirectory);
             string cliPath = Path.Combine(
                 resourcesDirectory,
                 "app.asar.unpacked",
@@ -20,12 +20,6 @@ internal static class OrcaCliLauncher
                 "cli",
                 "index.js"
             );
-
-            if (!File.Exists(electronPath))
-            {
-                Console.Error.WriteLine("Unable to locate Orca.exe next to \"{0}\"", resourcesDirectory);
-                return 1;
-            }
 
             if (!File.Exists(cliPath))
             {
@@ -65,6 +59,38 @@ internal static class OrcaCliLauncher
             Console.Error.WriteLine("Unable to start the Orca CLI: {0}", error.Message);
             return 1;
         }
+    }
+
+    private static string ResolveElectronPath(string appDirectory, string resourcesDirectory)
+    {
+        string identityPath = Path.Combine(resourcesDirectory, "app-executable-name.txt");
+        if (!File.Exists(identityPath))
+        {
+            throw new FileNotFoundException(
+                "Unable to locate the packaged app executable identity.",
+                identityPath
+            );
+        }
+
+        string executableName = File.ReadAllText(identityPath, Encoding.UTF8).Trim();
+        if (
+            string.IsNullOrWhiteSpace(executableName)
+            || !executableName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(executableName) != executableName
+        )
+        {
+            throw new InvalidDataException("The packaged app executable identity is invalid.");
+        }
+
+        string electronPath = Path.Combine(appDirectory, executableName);
+        if (!File.Exists(electronPath))
+        {
+            throw new FileNotFoundException(
+                "Unable to locate the packaged app executable.",
+                electronPath
+            );
+        }
+        return electronPath;
     }
 
     private static void MoveEnvironmentVariable(string sourceName, string targetName)

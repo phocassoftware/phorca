@@ -20,8 +20,8 @@ import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-pr
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
  * survives Windows auto-updates: the NSIS installer deletes the old install and force-kills every process
  * imaged under it, which would otherwise kill the daemon and its live terminals. The relocated exe is a
- * run-as-node Orca.exe copy (not node.exe) so there's no console flash and asar still resolves. Fail-open:
- * any failure returns null and the caller forks the install-dir host (pre-relocation behavior).
+ * run-as-node copy of the packaged app executable (not node.exe) so there's no console flash and asar
+ * still resolves. Fail-open: any failure returns null and the caller forks the install-dir host.
  *
  * What escapes the updater is the PATH, not the file name: electron-builder's kill sweep selects
  * processes whose image path sits under $INSTDIR. See docs/reference/windows-daemon-host-relocation.md
@@ -50,7 +50,7 @@ const LOCAL_HOST_ROOT_NAME = 'Orca'
  */
 const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
 
-// V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
+// V8 snapshots + ICU data the Electron bootstrap reads under ELECTRON_RUN_AS_NODE; app-exe siblings.
 const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
 
 type CopyOp = {

@@ -6,6 +6,11 @@ daemon, Orca materializes a trimmed copy of its own runtime under
 (`src/main/daemon/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
 auto-update and across a crash of the main process.
 
+The LOCALAPPDATA root deliberately remains `Orca` across executable branding. A private POC
+therefore runs its relocated host as
+`%LOCALAPPDATA%\Orca\daemon-host\<app version>\Phorca.exe`; the file name still follows
+`process.execPath` byte-for-byte.
+
 Read this before changing the copy plan, the host exe name, the LOCALAPPDATA layout, or
 `config/nsis/orca-installer-hooks.nsh`.
 

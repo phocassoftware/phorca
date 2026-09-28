@@ -26,6 +26,8 @@ export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
 export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
 export const MAIN_RELEASE_REPO = 'stablyai/orca'
 
+export const PHORCA_RELEASES_URL = 'https://github.com/phocassoftware/phorca-releases/releases'
+
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
 export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'

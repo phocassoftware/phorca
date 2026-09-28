@@ -1,6 +1,7 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
+const { writeWindowsExecutableIdentity } = require('./scripts/windows-executable-identity.cjs')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -68,7 +69,7 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+const appId = 'com.phocassoftware.phorca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -315,6 +316,13 @@ module.exports = {
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
+    }
+    if (context.electronPlatformName === 'win32') {
+      writeWindowsExecutableIdentity({
+        appOutDir: context.appOutDir,
+        resourcesDir,
+        packager: context.packager
+      })
     }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }

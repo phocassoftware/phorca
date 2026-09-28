@@ -58,10 +58,10 @@ there.
 
 It exists because the NSIS installer deletes the old install directory and force-
 kills every process imaged under it. Without relocation, an auto-update kills the
-terminal daemon and every live terminal with it. The copy is a run-as-node
-`Orca.exe` rather than `node.exe` so there is no console flash and asar still
-resolves; `config/nsis/orca-installer-hooks.nsh` reaps it on a real uninstall
-(guarded by `${isUpdated}` so an update's `uninstallOldVersion` never fires it).
+terminal daemon and every live terminal with it. The copy is a run-as-node copy of the packaged app
+executable rather than `node.exe`, so there is no console flash and asar still resolves. Upstream uses
+`Orca.exe`; the private Windows POC uses `Phorca.exe`. `config/nsis/orca-installer-hooks.nsh` reaps it
+on a real uninstall (guarded by `${isUpdated}` so an update's `uninstallOldVersion` never fires it).
 
 **At the time of these incidents the copy was also renamed** to
 `orca-terminal-daemon.exe`, the image name every incident here reports, and
@@ -257,9 +257,10 @@ obfuscated-command-line detector is tuned on.
 
 ### The spawn tree itself
 
-`Orca.exe` → the relocated daemon host (`orca-terminal-daemon.exe` in the builds
-these incidents cover, `Orca.exe` since) → a shell → an agent CLI is what a
-terminal multiplexer for coding agents _is_. `reg.exe` appears from
+The installed app executable → the same-name relocated daemon host
+(`orca-terminal-daemon.exe` in the builds these incidents cover, `Orca.exe` upstream since, and
+`Phorca.exe` in the private POC) → a shell → an agent CLI is what a terminal multiplexer for coding
+agents _is_. `reg.exe` appears from
 `src/main/win32-utils.ts`,
 `src/main/agent-hooks/managed-hook-owner-identity.ts` and
 `src/relay/pty-shell-utils.ts` (reading the OpenSSH `DefaultShell`).
@@ -422,8 +423,10 @@ on:
   `Suspicious PowerShell command line`, plus any further titles your tenant
   actually produced. Take the titles from your own incidents rather than from
   this list.
-- **File paths** — `Orca.exe` and `orca-terminal-daemon.exe` under
-  `%LOCALAPPDATA%\Programs\orca\` and `%LOCALAPPDATA%\Orca\daemon-host\`.
+- **File paths** — upstream `Orca.exe` or private-POC `Phorca.exe` under the corresponding
+  `%LOCALAPPDATA%\Programs\<product>\` install directory, plus that same executable name under
+  `%LOCALAPPDATA%\Orca\daemon-host\`. A rule scoped only to `Programs\Phorca\Phorca.exe` misses the
+  relocated process that actually spawns shells.
 
 Scope it as narrowly as your tenant will tolerate, and review it when Orca
 updates: the `daemon-host` path carries a `<version>` segment, so a rule pinned
