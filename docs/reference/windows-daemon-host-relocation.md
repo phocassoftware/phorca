@@ -103,7 +103,7 @@ stop being scored.
   `uninstallOldVersion`, and killing the daemon there defeats the whole feature. The legacy
   `orca-terminal-daemon.exe` name stays in the macro to reap hosts left by older builds.
 - The LOCALAPPDATA root follows the packaged executable basename. The uninstall macro uses
-  `${PRODUCT_NAME}` for the same root; keep the Windows product and executable names aligned.
+  electron-builder's resolved and sanitized `${PRODUCT_FILENAME}` for the same directory.
 
 ## Verifying a change
 

@@ -39,7 +39,8 @@ const HOST_SUBDIR = 'daemon-host'
 const MARKER_NAME = '.materialized.json'
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. The executable
-// basename scopes rebranded builds away from upstream Orca; NSIS uses PRODUCT_NAME for the same root.
+// basename scopes rebranded builds away from upstream Orca; electron-builder's PRODUCT_FILENAME
+// supplies the same sanitized executable basename to NSIS.
 const daemonHostRootName = (execPath: string): string => winPath.parse(execPath).name
 
 /**
