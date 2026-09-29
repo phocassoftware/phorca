@@ -128,6 +128,27 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://dev.meta.ai/docs/muse-code'
   },
   {
+    id: 'dsh',
+    label: translate('auto.lib.agent.catalog.dsh_label', 'DeepSeek Harness'),
+    cmd: 'dsh-tui',
+    searchAliases: ['deepseek', 'dsh', 'dst', 'deepseek harness'],
+    homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
+  },
+  {
+    id: 'qoder',
+    label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),
+    cmd: 'qodercli',
+    faviconDomain: 'qoder.com',
+    homepageUrl: 'https://docs.qoder.com/cli/overview'
+  },
+  {
+    id: 'zcode',
+    label: translate('auto.lib.agent.catalog.zcode_label', 'ZCode'),
+    cmd: 'zcode',
+    faviconDomain: 'zcode.z.ai',
+    homepageUrl: 'https://zcode.z.ai/en/docs'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
@@ -237,7 +258,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   },
   {
     id: 'freebuff',
-    label: translate('auto.lib.agent.catalog.b0b350de65', 'Freebuff'),
+    label: translate('auto.lib.agent.catalog.freebuff_label', 'Freebuff'),
     cmd: 'freebuff',
     faviconDomain: 'freebuff.com',
     homepageUrl: 'https://freebuff.com/cli'
