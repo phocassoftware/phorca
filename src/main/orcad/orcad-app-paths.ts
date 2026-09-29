@@ -25,7 +25,7 @@ export function resolveUserDataPath(): string {
     return explicit
   }
   const xdg = env('XDG_DATA_HOME')
-  return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
+  return xdg ? join(xdg, 'Phorca') : join(homedir(), '.phorca')
 }
 
 /** Electron's `'appData'` definition, computed without Electron. */

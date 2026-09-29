@@ -34,7 +34,7 @@ import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { getUpdateCheckClickOptions } from '@/lib/update-check-click-options'
 
 // Why lazy: the feedback form is only reachable from this menu's own item, so it does not
 // belong on the renderer boot graph. Shared with the menu-open warm below so both hit the
@@ -113,7 +113,6 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const lastShowOnboardingAtRef = React.useRef(0)
   const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
   const mountedRef = useMountedRef()
-  const updateCheckHint = getUpdateCheckHint()
 
   const showMilestones =
     setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
@@ -331,7 +330,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
               onPointerDown={handleCheckForUpdatesPointerDown}
               onSelect={handleCheckForUpdates}
-              title={updateCheckHint}
+              title="Open Phorca releases"
             >
               {updateStatus.state === 'checking' ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -340,7 +339,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               )}
               {translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee',
-                'Check for Updates'
+                'Browse Releases'
               )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -348,7 +347,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               <RotateCw className="size-3.5" />
               {translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
-                'Restart Orca'
+                'Restart Phorca'
               )}
             </DropdownMenuItem>
           </DropdownMenuContent>

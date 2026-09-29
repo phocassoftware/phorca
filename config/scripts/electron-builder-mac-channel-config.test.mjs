@@ -51,7 +51,7 @@ describe('electron-builder mac channel config', () => {
   it('builds hourly artifacts with the release signing identity', () => {
     withHourlyEnv((config) => {
       expect(config.mac.appId).toBeUndefined()
-      expect(config.appId).toBe('com.stablyai.orca')
+      expect(config.appId).toBe('com.phocassoftware.phorca')
       expect(config.mac.hardenedRuntime).toBe(true)
       expect(config.forceCodeSigning).toBe(true)
     })
@@ -76,10 +76,10 @@ describe('electron-builder mac channel config', () => {
   // break update checks for every real user.
   it('publishes hourly builds to the separate hourly repo', () => {
     withHourlyEnv((config) => {
-      expect(config.publish).toMatchObject({ repo: 'orca-hourly', releaseType: 'prerelease' })
+      expect(config.publish).toMatchObject({ repo: 'phorca-releases', releaseType: 'prerelease' })
     })
     expect(electronBuilderConfig.publish).toMatchObject({
-      repo: 'orca',
+      repo: 'phorca-releases',
       releaseType: 'draft'
     })
   })
@@ -98,11 +98,11 @@ describe('electron-builder mac channel config', () => {
   // argument apply. Only the destination repo differs.
   it('builds adhoc artifacts with the release identity and its own repo', () => {
     withAdhocEnv((config) => {
-      expect(config.appId).toBe('com.stablyai.orca')
+      expect(config.appId).toBe('com.phocassoftware.phorca')
       expect(config.mac.hardenedRuntime).toBe(true)
       expect(config.mac.notarize).toBe(true)
       expect(config.forceCodeSigning).toBe(true)
-      expect(config.publish).toMatchObject({ repo: 'orca-adhoc', releaseType: 'prerelease' })
+      expect(config.publish).toMatchObject({ repo: 'phorca-releases', releaseType: 'prerelease' })
     })
   })
 
@@ -117,11 +117,11 @@ describe('electron-builder mac channel config', () => {
 
   it('builds daily artifacts with the release identity and its own repo', () => {
     withDailyEnv((config) => {
-      expect(config.appId).toBe('com.stablyai.orca')
+      expect(config.appId).toBe('com.phocassoftware.phorca')
       expect(config.mac.hardenedRuntime).toBe(true)
       expect(config.mac.notarize).toBe(true)
       expect(config.forceCodeSigning).toBe(true)
-      expect(config.publish).toMatchObject({ repo: 'orca-daily', releaseType: 'prerelease' })
+      expect(config.publish).toMatchObject({ repo: 'phorca-releases', releaseType: 'prerelease' })
     })
   })
 
@@ -134,17 +134,16 @@ describe('electron-builder mac channel config', () => {
     )
   })
 
-  // Why: the dev channels share every packaging decision except where they
-  // publish, so a future edit that collapses them must not also collapse the
-  // repos — a branch or daily build landing in orca-hourly would be offered to
-  // everyone riding main's hourlies.
-  it('keeps the dev channels on separate repos', () => {
+  it('keeps every channel on the fork release destination', () => {
     withHourlyEnv((hourly) => {
       withDailyEnv((daily) => {
         withAdhocEnv((adhoc) => {
-          expect(new Set([hourly.publish.repo, daily.publish.repo, adhoc.publish.repo]).size).toBe(
-            3
-          )
+          for (const config of [hourly, daily, adhoc]) {
+            expect(config.publish).toMatchObject({
+              owner: 'phocassoftware',
+              repo: 'phorca-releases'
+            })
+          }
         })
       })
     })

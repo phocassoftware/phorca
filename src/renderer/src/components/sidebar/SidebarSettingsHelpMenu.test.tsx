@@ -241,9 +241,9 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('Onboarding')
   })
 
-  it('renders Restart Orca by default', () => {
+  it('renders Restart Phorca by default', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Restart Orca')
+    expect(html).toContain('Restart Phorca')
   })
 
   it('renders Docs link', () => {
@@ -284,16 +284,15 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('>X<')
   })
 
-  it('renders Check for Updates menu item', () => {
+  it('renders Browse Releases menu item', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Check for Updates')
-    expect(html).toMatch(/(⇧\+click|Shift\+click) checks the latest RC/)
-    expect(html).toMatch(/(⌘\+click|Ctrl\+click) checks the latest perf build/)
+    expect(html).toContain('Browse Releases')
+    expect(html).toContain('Open Phorca releases')
   })
 
   it('passes update-check modifier options through the updater bridge', async () => {
     const container = await renderMenu()
-    const checkButton = findMenuItem(container, 'Check for Updates')
+    const checkButton = findMenuItem(container, 'Browse Releases')
     const primaryModifier = navigator.userAgent.includes('Mac')
       ? { metaKey: true }
       : { ctrlKey: true }

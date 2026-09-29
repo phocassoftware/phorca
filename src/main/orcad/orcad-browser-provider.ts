@@ -65,6 +65,8 @@ export function installedElectronCandidates(
   const joinPath = platform === 'win32' ? win32.join : posix.join
   if (platform === 'darwin') {
     return [
+      '/Applications/Phorca.app/Contents/MacOS/Phorca',
+      joinPath(homePath, 'Applications', 'Phorca.app', 'Contents', 'MacOS', 'Phorca'),
       '/Applications/Orca.app/Contents/MacOS/Orca',
       joinPath(homePath, 'Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
     ]
@@ -89,6 +91,7 @@ export function installedElectronCandidates(
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
+    '/opt/Phorca/orca-ide',
     '/opt/Orca/orca-ide'
   ]
 }

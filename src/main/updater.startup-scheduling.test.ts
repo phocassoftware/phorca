@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
-import { UpdaterSetup } from './updater/updater-setup'
+
+const openReleasesPageMock = vi.hoisted(() => vi.fn())
 
 const {
   appMock,
@@ -26,12 +27,15 @@ vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExi
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
+vi.mock('./releases-page', () => ({ openReleasesPage: openReleasesPageMock }))
 
 warmUpdaterModule()
 
 describe('updater', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     resetUpdaterMocks()
+    openReleasesPageMock.mockReset()
     vi.useFakeTimers()
   })
 
@@ -50,23 +54,44 @@ describe('updater', () => {
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
   })
 
-  it('keeps explicit remote update support without starting desktop polling', async () => {
+  it('keeps managed builds away from upstream desktop and remote updates', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
     const mainWindow = { webContents: { send: vi.fn() } }
-    const updater = new UpdaterSetup()
+    const {
+      setupAutoUpdater,
+      checkForUpdates,
+      checkForUpdatesFromMenu,
+      downloadUpdate,
+      quitAndInstall,
+      isQuittingForUpdate,
+      getRemoteServerUpdateSupport,
+      getRemoteServerUpdaterSnapshot,
+      checkForRemoteServerUpdate,
+      downloadRemoteServerUpdate,
+      installRemoteServerUpdate,
+      listAvailableReleaseBuilds
+    } = await loadUpdaterModule()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater setup only reads webContents.send; a real BrowserWindow cannot exist in Vitest.
-    updater.setupAutoUpdater(mainWindow as never, undefined, true)
+    setupAutoUpdater(mainWindow as never)
+    checkForUpdates()
+    checkForUpdatesFromMenu()
+    downloadUpdate()
+    quitAndInstall()
 
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.on).toHaveBeenCalled()
+    expect(openReleasesPageMock).toHaveBeenCalledTimes(1)
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(getRemoteServerUpdateSupport()).toMatchObject({ automatic: false })
+    expect(getRemoteServerUpdaterSnapshot('runtime-1').status).toEqual({ state: 'idle' })
+    expect(checkForRemoteServerUpdate('runtime-1').status).toEqual({ state: 'idle' })
+    expect(downloadRemoteServerUpdate('runtime-1').status).toEqual({ state: 'idle' })
+    expect(() => installRemoteServerUpdate('runtime-1')).toThrow('managed releases page')
+    expect(await listAvailableReleaseBuilds('stable')).toEqual([])
+
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.on).not.toHaveBeenCalled()
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expect(fetchNudgeMock).not.toHaveBeenCalled()
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
-    expect(updater.getRemoteServerUpdateSupport()).toEqual({
-      installMode: 'interactive',
-      automatic: true,
-      reason: 'available'
-    })
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {

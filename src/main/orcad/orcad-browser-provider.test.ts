@@ -177,11 +177,15 @@ describe('ExternalChromiumBrowserProcess', () => {
 describe('cross-platform browser provider paths', () => {
   it('resolves installed Electron launchers on macOS, Linux, and Windows', () => {
     expect(installedElectronCandidates('darwin', '/Users/test', {})).toContain(
+      '/Users/test/Applications/Phorca.app/Contents/MacOS/Phorca'
+    )
+    expect(installedElectronCandidates('darwin', '/Users/test', {})).toContain(
       '/Users/test/Applications/Orca.app/Contents/MacOS/Orca'
     )
     expect(installedElectronCandidates('linux', '/home/test', {})).toContain(
       '/home/test/.local/bin/orca-ide'
     )
+    expect(installedElectronCandidates('linux', '/home/test', {})).toContain('/opt/Phorca/orca-ide')
     const windowsCandidates = installedElectronCandidates('win32', 'C:\\Users\\test', {
       LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local'
     })

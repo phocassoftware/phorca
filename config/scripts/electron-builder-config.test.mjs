@@ -20,6 +20,9 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
     )
+    expect(electronBuilderConfig.productName).toBe('Phorca')
+    expect(electronBuilderConfig.win.executableName).toBe('Phorca')
+    expect(electronBuilderConfig.deb.packageName).toBe('phorca-ide')
   })
 
   it('excludes repo-only source trees from app.asar', () => {
@@ -270,7 +273,7 @@ describe('electron-builder config', () => {
   })
 
   it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('phorca')
   })
 
   it('uses the release artifact set as local Linux targets without changing existing names', () => {
@@ -279,7 +282,7 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
-      packageName: 'orca-ide',
+      packageName: 'phorca-ide',
       artifactName: 'orca-ide-${version}.${arch}.${ext}'
     })
   })

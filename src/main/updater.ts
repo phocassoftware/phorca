@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
@@ -31,10 +31,25 @@ export function getUpdateStatus(): UpdateStatus {
 }
 
 export function getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    return {
+      installMode: 'unsupported-headless-serve',
+      automatic: false,
+      reason: 'updater-unavailable'
+    }
+  }
   return updater.getRemoteServerUpdateSupport()
 }
 
 export function getRemoteServerUpdaterSnapshot(runtimeId: string): RemoteServerUpdaterSnapshot {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    return {
+      appVersion: app.getVersion(),
+      runtimeId,
+      support: getRemoteServerUpdateSupport(),
+      status: { state: 'idle' }
+    }
+  }
   return updater.getRemoteServerUpdaterSnapshot(runtimeId)
 }
 
@@ -42,14 +57,23 @@ export function checkForRemoteServerUpdate(
   runtimeId: string,
   options?: UpdateCheckOptions
 ): RemoteServerUpdaterSnapshot {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    return getRemoteServerUpdaterSnapshot(runtimeId)
+  }
   return updater.checkForRemoteServerUpdate(runtimeId, options)
 }
 
 export function downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    return getRemoteServerUpdaterSnapshot(runtimeId)
+  }
   return updater.downloadRemoteServerUpdate(runtimeId)
 }
 
 export function installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    throw new Error('Phorca updates are available from the managed releases page.')
+  }
   return updater.installRemoteServerUpdate(runtimeId)
 }
 
@@ -107,5 +131,7 @@ export function dismissAvailableUpdate(): void {
 }
 
 export function setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
-  updater.setupAutoUpdater(mainWindow, opts, IS_PHORCA_MANAGED_BUILD)
+  if (!IS_PHORCA_MANAGED_BUILD) {
+    updater.setupAutoUpdater(mainWindow, opts)
+  }
 }

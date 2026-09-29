@@ -7,7 +7,7 @@ import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { getUpdateCheckClickOptions } from '@/lib/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
@@ -30,7 +30,6 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const updateCheckHint = getUpdateCheckHint()
   // Why: channel switching is a power-user escape hatch that can downgrade the app
   // onto an unvetted build. Option/Alt-clicking the header reveals it rather than
   // shipping it on the default surface.
@@ -81,11 +80,11 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
       <SearchableSetting
         title={translate(
           'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-          'Check for Updates'
+          'Browse Releases'
         )}
         description={translate(
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
-          'Check for app updates and install a newer Orca version.'
+          'Browse Phorca releases to get an updated build.'
         )}
         keywords={['update', 'version', 'release notes', 'download']}
         className="space-y-3"
@@ -97,7 +96,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             // Why: modifier-click channels are power-user update affordances, not
             // persistent settings toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
-            title={updateCheckHint}
+            title="Open Phorca releases"
             disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
             className="gap-2"
           >
@@ -108,7 +107,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             )}
             {translate(
               'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-              'Check for Updates'
+              'Browse Releases'
             )}
           </Button>
 
@@ -154,7 +153,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           {updateStatus.state === 'idle' &&
             translate(
               'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
-              'Updates are checked automatically on launch.'
+              'Updates are available from Phorca releases.'
             )}
           {updateStatus.state === 'checking' &&
             translate(
