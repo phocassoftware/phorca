@@ -12,15 +12,15 @@ import type {
 import type { ReleaseBuild, ReleaseChannel } from '../shared/release-channel'
 import type { ReleaseBuildListOptions } from './updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './updater/updater-setup'
-import type { UpdateInstallMode } from './updater/updater-state'
 import { openReleasesPage } from './releases-page'
+import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater/updater-state'
 
 const IS_PHORCA_MANAGED_BUILD = typeof PHORCA_MANAGED_BUILD !== 'undefined' && PHORCA_MANAGED_BUILD
 
 // Keep one service instance so all public API calls share updater state and event listeners.
 const updater = new UpdaterSetup()
 
-export type { UpdateInstallMode, UpdaterSetupOptions }
+export type { PreQuitCleanupFailureMode, UpdateInstallMode, UpdaterSetupOptions }
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
   return updater.resolveUpdateInstallMode(isServeMode)
