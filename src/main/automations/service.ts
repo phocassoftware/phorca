@@ -112,10 +112,7 @@ export class AutomationService {
   }
 
   start(): void {
-    if (!getPhorcaManagedPolicy().allowAutomations) {
-      return
-    }
-    if (this.timer) {
+    if (this.timer || !getPhorcaManagedPolicy().allowAutomations) {
       return
     }
     this.timer = setInterval(() => {
@@ -229,10 +226,7 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (!getPhorcaManagedPolicy().allowAutomations) {
-      return
-    }
-    if (this.evaluating) {
+    if (this.evaluating || !getPhorcaManagedPolicy().allowAutomations) {
       return
     }
     this.evaluating = true

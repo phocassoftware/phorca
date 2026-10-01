@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildAiVaultResumeCommand,
@@ -6,6 +6,17 @@ import {
 } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
+  it('keeps unsupported managed history readable without offering a launch command', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'kimi',
+        sessionId: 'old-session',
+        cwd: null,
+        platform: 'linux'
+      })
+    ).toBe('')
+  })
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
     expect(
       buildAiVaultResumeCommand({

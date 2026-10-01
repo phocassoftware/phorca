@@ -741,6 +741,19 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      - name: Fetch upstream compatibility releases for the Phorca fork
+        if: github.repository == 'phocassoftware/phorca'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/stablyai/orca/releases/latest --jq .tag_name)
+          [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          git fetch --filter=blob:none --no-tags https://github.com/stablyai/orca.git \
+            "refs/tags/$latest:refs/tags/$latest" \
+            refs/tags/v1.4.184:refs/tags/v1.4.184 \
+            refs/tags/v1.4.190:refs/tags/v1.4.190 \
+            refs/tags/v1.4.199:refs/tags/v1.4.199
+
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node

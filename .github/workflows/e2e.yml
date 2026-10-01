@@ -156,6 +156,10 @@ jobs:
         with:
           native-runtime: electron
 
+      - uses: ./.github/actions/provision-phorca-test-policy
+        with:
+          capabilities: allowRuntimeDownloads
+
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
@@ -241,6 +245,10 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+
+      - uses: ./.github/actions/provision-phorca-test-policy
+        with:
+          capabilities: allowRuntimeDownloads
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
@@ -328,6 +336,10 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+
+      - uses: ./.github/actions/provision-phorca-test-policy
+        with:
+          capabilities: allowRuntimeDownloads
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
@@ -425,6 +437,9 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+      - uses: ./.github/actions/provision-phorca-test-policy
+        with:
+          capabilities: allowRuntimeDownloads
       - uses: actions/download-artifact@v8
         with:
           name: e2e-build-out

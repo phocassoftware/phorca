@@ -17,6 +17,8 @@ Managed Phorca builds use a machine policy independent of profile settings, envi
 
 On macOS/Linux the file and every ancestor must be root-owned, not group/world-writable, and not a symlink. On Windows deploy with the normal machine-policy ACL: administrators/SYSTEM can write, ordinary users can only read. Never delegate write access to the policy key. There is no user-supplied policy path or environment override.
 
+Windows SSH hosts also need the administrator-provisioned `@orca/windows-registry` addon to read opt-in policy; without it, optional capabilities remain denied. CI provisions the same administrator-owned policy on isolated Linux/macOS runners for tests that require downloads or native computer use.
+
 Use [the JSON schema](../../config/phorca-managed-policy.schema.json) and [restricted example](../../config/phorca-managed-policy.example.json) with Intune/MDM deployment tooling. They are configuration artifacts, not an ADMX template or a native Intune settings catalogue integration. Deploy the Windows value through a system-context registry policy/remediation; deploy the Unix file with administrator ownership and mode `0644` under `0755` directories. A minimal document is `{"version":1}`. Only administrators should opt capabilities in after review.
 
 | Field                   | Enforcement when false                                                                                                                                                                                                                         |

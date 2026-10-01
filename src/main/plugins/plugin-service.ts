@@ -41,7 +41,6 @@ export type { PluginLogLine } from './plugin-log-buffer'
 export type { PluginServiceOptions } from './plugin-service-options'
 
 export class PluginService {
-  readonly options: PluginServiceOptions
   private readonly registry = createPluginExtensionRegistry()
   private readonly eventBus = new PluginEventBus()
   private readonly audit: PluginAuditLog
@@ -62,8 +61,7 @@ export class PluginService {
     notifyChanged: () => this.notifyChanged(false)
   })
 
-  constructor(options: PluginServiceOptions) {
-    this.options = options
+  constructor(readonly options: PluginServiceOptions) {
     this.contentPacks = new PluginContentPackRegistry(this.contentVerifier, (pluginKey) =>
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
@@ -283,11 +281,7 @@ export class PluginService {
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {
-    if (
-      !getPhorcaManagedPolicy().allowPlugins ||
-      !this.options.isPluginSystemEnabled() ||
-      this.disposed
-    ) {
+    if (!this.options.isPluginSystemEnabled() || this.disposed) {
       return
     }
     deliverPluginEvent({

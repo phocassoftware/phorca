@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/computer-e2e.yml'
+      - '.github/actions/provision-phorca-test-policy/**'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
       - 'config/scripts/build-native-for-platform.mjs'
@@ -166,6 +167,9 @@ jobs:
         run: >-
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/build-native-for-platform.test.mjs
+      - uses: ./.github/actions/provision-phorca-test-policy
+        with:
+          capabilities: allowComputerUse
       - name: Authenticated helper owner-loss smoke
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification

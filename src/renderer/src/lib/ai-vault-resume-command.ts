@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import { isPhorcaManagedBuild } from '../../../shared/phorca-managed-build'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
@@ -125,8 +126,12 @@ function buildAiVaultResumeForWorktree(
    *  Spawned startups drop them through `envToDelete` instead. */
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
+  if (isPhorcaManagedBuild() && args.session.agent !== 'claude' && args.session.agent !== 'codex') {
+    throw new Error('Managed Phorca launches support only Claude and Codex.')
+  }
   const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
+    !isPhorcaManagedBuild() &&
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&

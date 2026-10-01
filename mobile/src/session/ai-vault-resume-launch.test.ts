@@ -121,6 +121,46 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it.each(['claude', 'codex'] as const)(
+    'enforces managed %s approval in startup and legacy resume',
+    (agent) => {
+      vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+      const value = session({ agent, cwd: null })
+      const expected =
+        agent === 'claude'
+          ? '--permission-mode default'
+          : '--ask-for-approval on-request --sandbox workspace-write'
+      const launch = buildMobileAiVaultResumeLaunch({
+        session: value,
+        hostPlatform: 'linux',
+        settings: {
+          agentCmdOverrides: { [agent]: 'wrapper --yolo' },
+          agentDefaultArgs: { [agent]: '--dangerously-skip-permissions' },
+          agentDefaultEnv: { [agent]: { UNSAFE_OVERRIDE: '1' } }
+        }
+      })
+      expect(launch.launchConfig?.agentArgs).toBe(expected)
+      expect(launch.command).not.toMatch(/wrapper|yolo|dangerously/)
+      expect(launch.env).not.toHaveProperty('UNSAFE_OVERRIDE')
+      const legacy = buildMobileAiVaultResumeCommand({
+        session: value,
+        hostPlatform: 'linux',
+        commandOverride: 'wrapper --yolo'
+      })
+      expect(legacy).toContain(expected)
+      expect(legacy).not.toMatch(/wrapper|yolo/)
+    }
+  )
+
+  it('refuses an unsupported managed agent even through the legacy fallback', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(() =>
+      buildMobileAiVaultResumeLaunch({
+        session: session({ agent: 'kimi' }),
+        hostPlatform: 'linux'
+      })
+    ).toThrow('only Claude and Codex')
+  })
   it('routes Kimi through the resumable-agent startup plan', () => {
     // Why: kimi joining RESUMABLE_TUI_AGENTS moves it off the plain command fallback, so the
     // cd prefix Kimi needs (sessions are work-dir-scoped) must survive the new branch.

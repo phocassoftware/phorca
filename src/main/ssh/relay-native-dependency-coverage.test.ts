@@ -24,6 +24,9 @@ const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
  * anything not listed must appear in RELAY_NATIVE_DEPS.
  */
 const DEGRADES_WITHOUT_INSTALL: Record<string, string> = {
+  '@orca/windows-registry':
+    'Windows-only machine-policy reader. A missing addon denies optional Phorca capabilities; ' +
+    'administrators must provision it to opt a Windows SSH host into those capabilities.',
   '@vscode/windows-process-tree':
     'Windows-only, and both ways of installing it fail. A normal install rebuilds ' +
     'from source because the tarball carries a binding.gyp, and that build fails ' +

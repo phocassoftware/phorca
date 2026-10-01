@@ -11,6 +11,8 @@ import {
   withoutEnvCommand
 } from './tui-agent-startup-shell'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
+import { isPhorcaManagedBuild } from './phorca-managed-build'
+import { getTuiAgentDefaultArgs } from './tui-agent-launch-defaults'
 
 export function buildAiVaultResumeCommand(args: {
   agent: AiVaultAgent
@@ -23,9 +25,14 @@ export function buildAiVaultResumeCommand(args: {
   shell?: AgentStartupShell
   clearEnvNames?: readonly string[]
 }): string {
+  if (isPhorcaManagedBuild() && args.agent !== 'claude' && args.agent !== 'codex') {
+    return ''
+  }
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
-  const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
+  const baseCommand = isPhorcaManagedBuild()
+    ? `${defaultAiVaultResumeCommandBase(agent)} ${getTuiAgentDefaultArgs(agent)}`
+    : commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   // Why: OMP's and Prime Agent's `--resume` accept an absolute transcript path,
   // which resolves regardless of which session-dir root (custom
   // OMP_CODING_AGENT_DIR / PRIME_AGENT_CODING_AGENT_DIR / WSL home) the file was

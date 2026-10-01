@@ -1,0 +1,33 @@
+name: Provision Phorca test policy
+description: Permit explicit capabilities through administrator policy on isolated CI hosts.
+inputs:
+  capabilities:
+    description: Comma-separated policy capabilities to permit.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PHORCA_CI_CAPABILITIES: ${{ inputs.capabilities }}
+      run: |
+        case "$RUNNER_OS" in
+          Linux) policy_dir=/etc/phocas/phorca ;;
+          macOS) policy_dir='/Library/Application Support/Phocas/Phorca' ;;
+          *) echo 'This action requires a Linux or macOS CI host.' >&2; exit 1 ;;
+        esac
+        policy=$(mktemp)
+        trap 'rm -f "$policy"' EXIT
+        node --input-type=module > "$policy" <<'NODE'
+        import { readFileSync } from 'node:fs'
+        const policy = JSON.parse(readFileSync('config/phorca-managed-policy.example.json', 'utf8'))
+        for (const name of process.env.PHORCA_CI_CAPABILITIES.split(',').map(value => value.trim())) {
+          if (!Object.hasOwn(policy, name) || typeof policy[name] !== 'boolean') {
+            throw new Error(`Unknown Phorca capability: ${name}`)
+          }
+          policy[name] = true
+        }
+        console.log(JSON.stringify(policy))
+        NODE
+        sudo install -d -m 0755 "$policy_dir"
+        sudo install -m 0644 "$policy" "$policy_dir/policy.json"

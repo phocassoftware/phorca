@@ -27,7 +27,6 @@ import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-sessi
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
 
 export class RelaySessionBroker {
-  private readonly options: RelaySessionBrokerOptions
   private readonly relayHostId: string
   private readonly originPool: RelayOriginPool
   private readonly regionRefresh: RelayRegionRefresh | null
@@ -35,8 +34,7 @@ export class RelaySessionBroker {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
 
-  private constructor(options: RelaySessionBrokerOptions) {
-    this.options = options
+  private constructor(private readonly options: RelaySessionBrokerOptions) {
     this.relayHostId = deriveRelayHostId(options.keypair.publicKey)
     this.originPool = new RelayOriginPool({
       directorUrl: options.authConfig.relayDirectorUrl,

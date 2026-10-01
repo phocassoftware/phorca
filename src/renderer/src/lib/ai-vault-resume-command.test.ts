@@ -69,6 +69,46 @@ function buildQueuedAiVaultResumeCommand(
 }
 
 describe('ai vault resume command runtime', () => {
+  it.each(['claude', 'codex'] as const)(
+    'rebuilds cached remote %s resumes with managed approval',
+    (agent) => {
+      vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+      const state = makeState({ worktreePath: 'C:\\repo' })
+      const session = {
+        agent,
+        sessionId: 'remote-session',
+        cwd: '/repo',
+        codexHome: '/home/ada/.codex',
+        executionHostId: 'ssh:remote' as const,
+        executionHostPlatform: 'linux' as const,
+        resumeCommand: 'unsafe-wrapper --yolo'
+      }
+      const startup = buildAiVaultResumeStartupForWorktree({ state, session })
+      const copy = buildAiVaultResumeCopyCommandForWorktree({ state, session })
+      const approval = agent === 'claude' ? '--permission-mode' : '--ask-for-approval'
+      expect(startup.launchConfig?.agentArgs).toContain(approval)
+      expect(startup.command).toContain('remote-session')
+      expect(copy).toContain(approval)
+      expect(`${startup.command} ${copy}`).not.toMatch(/unsafe-wrapper|--yolo/)
+    }
+  )
+
+  it('refuses unsupported managed launches even with a cached remote command', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(() =>
+      buildAiVaultResumeStartupForWorktree({
+        state: makeState({ worktreePath: 'C:\\repo' }),
+        session: {
+          agent: 'kimi',
+          sessionId: 'old-session',
+          cwd: '/repo',
+          codexHome: null,
+          executionHostId: 'ssh:remote',
+          resumeCommand: 'kimi --yolo'
+        }
+      })
+    ).toThrow('Managed Phorca launches support only Claude and Codex.')
+  })
   it('repro: queues a host-runtime resume without configured-WSL shell syntax', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',

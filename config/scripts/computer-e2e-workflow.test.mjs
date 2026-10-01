@@ -2,10 +2,38 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { runProcess } from '../../src/shared/child-process/run-process'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 
 describe('computer-use e2e workflow', () => {
+  it('grants only explicitly requested CI policy capabilities and rejects invalid fields', async () => {
+    const action = parse(
+      readFileSync(
+        join(projectDir, '.github/actions/provision-phorca-test-policy/action.yml'),
+        'utf8'
+      )
+    )
+    const script = action.runs.steps[0].run.split("<<'NODE'\n")[1].split('\nNODE')[0]
+    for (const capability of ['allowRuntimeDownloads', '__proto__', 'version']) {
+      const result = await runProcess({
+        program: process.execPath,
+        args: ['--input-type=module', '-e', script],
+        cwd: projectDir,
+        env: { PHORCA_CI_CAPABILITIES: capability }
+      })
+      if (capability === 'allowRuntimeDownloads') {
+        expect(result.code, result.stderr).toBe(0)
+        const policy = JSON.parse(result.stdout)
+        expect(Object.entries(policy).filter(([, value]) => value === true)).toEqual([
+          ['allowRuntimeDownloads', true]
+        ])
+      } else {
+        expect(result.code).not.toBe(0)
+        expect(result.stderr).toContain('Unknown Phorca capability:')
+      }
+    }
+  })
   it('cancels superseded pull request runs without cancelling scheduled runs', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')

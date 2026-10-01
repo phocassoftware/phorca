@@ -9,7 +9,10 @@ import {
   EmulatorStartLeaseRegistry,
   type EmulatorStartLease
 } from './emulator-start-lease-registry'
-import { listAvailableEmulatorDevices } from './emulator-device-inventory'
+import {
+  listAvailableEmulatorDevices,
+  resolveEmulatorDeviceBackend
+} from './emulator-device-inventory'
 import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
@@ -93,11 +96,8 @@ export class EmulatorBridge {
   ): Promise<EmulatorSessionInfo | null> {
     assertPhorcaCapabilityAllowed('allowComputerUse')
     const active = this.getActiveForWorktree(worktreeId)
-    if (!active) {
-      return null
-    }
-    const backend = this.backendForActiveWorktree(worktreeId)
-    if (!backend) {
+    const backend = active ? this.backendForActiveWorktree(worktreeId) : null
+    if (!active || !backend) {
       return null
     }
     if (device) {
@@ -339,25 +339,18 @@ export class EmulatorBridge {
 
   private backendForActiveWorktree(worktreeId: string): EmulatorBackend | null {
     const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
+    const session = key ? this.sessionRegistry.getSession(key) : null
     return session ? this.backendForKind(session.backend) : null
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
-    for (const backend of this.backends) {
-      if (await backend.ownsDevice(device)) {
-        return backend
-      }
-    }
     // Why: fall back to a host-supported backend, else the platform-primary one,
     // so an unrecognized device (e.g. no SDK yet) surfaces the right setup error
     // — Android on Windows/Linux, iOS/CoreSimulator on macOS — not iOS-on-Windows.
-    return (
-      this.backends.find((backend) => backend.isSupportedOnHost()) ??
-      (platform() === 'darwin' ? this.iosBackend : this.androidBackend)
+    return resolveEmulatorDeviceBackend(
+      this.backends,
+      device,
+      platform() === 'darwin' ? this.iosBackend : this.androidBackend
     )
   }
 }

@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { isPhorcaManagedBuild } from '../../../src/shared/phorca-managed-build'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
@@ -70,6 +71,9 @@ export function buildMobileAiVaultResumeLaunch(args: {
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
 }): MobileAiVaultResumeLaunch {
+  if (isPhorcaManagedBuild() && args.session.agent !== 'claude' && args.session.agent !== 'codex') {
+    throw new Error('Managed Phorca launches support only Claude and Codex.')
+  }
   const shell =
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
