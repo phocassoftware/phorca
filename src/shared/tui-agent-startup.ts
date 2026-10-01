@@ -17,6 +17,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { isPhorcaManagedBuild } from './phorca-managed-build'
 
 export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 
@@ -54,6 +55,9 @@ export function buildAgentStartupPlan(args: {
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
 }): AgentStartupPlan | null {
+  if (isPhorcaManagedBuild()) {
+    args = { ...args, agentEnv: {} }
+  }
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
@@ -227,6 +231,9 @@ export function buildAgentDraftLaunchPlan(args: {
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
+  if (isPhorcaManagedBuild()) {
+    args = { ...args, agentEnv: {} }
+  }
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
   const config = TUI_AGENT_CONFIG[agent]

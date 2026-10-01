@@ -10,6 +10,7 @@ import {
 import { RpcDispatcher } from './dispatcher'
 import { defineMethod, defineStreamingMethod, type RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { setActiveSink } from '../../observability/tracer'
 
 function makeRequest(method: string, params: unknown = {}): RpcRequest {
   return {
@@ -143,6 +144,54 @@ const METHODS = [
 ]
 
 describe('RpcDispatcher feature interactions', () => {
+  it('records managed action outcomes without arguments, tokens or error contents', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const records: unknown[] = []
+    setActiveSink({
+      push: (record) => {
+        records.push(record)
+      },
+      flush: () => {},
+      close: () => {}
+    })
+    try {
+      const dispatcher = new RpcDispatcher({
+        runtime: makeRuntime(),
+        methods: [
+          defineMethod({
+            name: 'assessment.success',
+            params: z.object({ prompt: z.string() }),
+            handler: () => ({ ok: true })
+          }),
+          defineMethod({
+            name: 'assessment.failure',
+            params: z.object({ prompt: z.string() }),
+            handler: () => {
+              throw new Error('private-error-secret')
+            }
+          })
+        ]
+      })
+      for (const method of ['assessment.success', 'assessment.failure']) {
+        await dispatcher.dispatch(makeRequest(method, { prompt: 'private-prompt-secret' }))
+      }
+      expect(records).toMatchObject([
+        {
+          name: 'phorca.rpc.action',
+          attributes: { method: 'assessment.success', clientKind: 'local', outcome: 'success' },
+          exit: { _tag: 'Success' }
+        },
+        {
+          name: 'phorca.rpc.action',
+          attributes: { method: 'assessment.failure', clientKind: 'local', outcome: 'error' },
+          exit: { _tag: 'Failure' }
+        }
+      ])
+      expect(JSON.stringify(records)).not.toMatch(/private-|"tok"/)
+    } finally {
+      setActiveSink(null)
+    }
+  })
   it('records runtime feature use after successful runtime tool methods', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })

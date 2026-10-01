@@ -15,6 +15,7 @@ import {
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
 
@@ -42,6 +43,9 @@ export async function setClaudeStructuredOption(
   input: { key: string; value: string },
   timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
+  if (isPhorcaManagedBuild() && input.key === 'permissionMode' && input.value !== 'default') {
+    throw new AgentSessionOptionRejectedError('Phorca requires manual approval mode')
+  }
   const fastMode =
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)

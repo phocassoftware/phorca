@@ -6,6 +6,7 @@ import type {
   ExternalAutomationUpdateInput
 } from '../../shared/automations-types'
 import { assertExternalAutomationJobId } from './external-manager-job-id'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { runLocalAutomationCommand } from './external-manager-local-command'
 import { requireExternalAutomationMultiplexer } from './external-manager-relay'
 import { clearHermesCronOutputRunCountCache } from './hermes-cron-output'
@@ -81,6 +82,7 @@ function hermesCronMutationArgs(
 export async function createExternalAutomation(
   input: ExternalAutomationCreateInput
 ): Promise<void> {
+  assertPhorcaCapabilityAllowed('allowAutomations')
   const normalized = normalizeHermesCronMutationInput(input)
   if (input.target.type === 'local') {
     await runLocalAutomationCommand('hermes', hermesCronMutationArgs(null, normalized))
@@ -99,6 +101,7 @@ export async function createExternalAutomation(
 export async function updateExternalAutomation(
   input: ExternalAutomationUpdateInput
 ): Promise<void> {
+  assertPhorcaCapabilityAllowed('allowAutomations')
   assertExternalAutomationJobId(input.jobId)
   const normalized = normalizeHermesCronMutationInput(input)
   if (input.target.type === 'local') {
@@ -119,6 +122,9 @@ export async function updateExternalAutomation(
 export async function runExternalAutomationAction(
   input: ExternalAutomationActionInput
 ): Promise<void> {
+  if (input.action === 'resume' || input.action === 'run') {
+    assertPhorcaCapabilityAllowed('allowAutomations')
+  }
   assertExternalAutomationJobId(input.jobId)
   const command = providerActionCommand(input.provider, input.action)
   if (input.target.type === 'local') {

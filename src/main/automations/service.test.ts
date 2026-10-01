@@ -47,6 +47,18 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 })
 
 describe('AutomationService', () => {
+  it('does not schedule or dispatch managed automations, including manual run requests', async () => {
+    const store = await createStore()
+    const list = vi.spyOn(store, 'listAutomations')
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    service.start()
+    service.setRendererReady()
+    await vi.advanceTimersByTimeAsync(120_000)
+    await expect(service.runNow('saved-automation')).rejects.toThrow('administrator policy')
+    expect(list).not.toHaveBeenCalled()
+    service.stop()
+  })
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-test-'))
     vi.useFakeTimers()

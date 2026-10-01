@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { getPhorcaManagedPolicy } from '../phorca/managed-policy'
 import {
   cleanCloudServiceUrl as cleanUrl,
   cleanCloudServiceOrigin as cleanOrigin
@@ -43,6 +44,12 @@ export function getOrcaCloudAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
 ): { configured: true; config: OrcaCloudAuthConfig } | { configured: false; setupMessage: string } {
+  if (!getPhorcaManagedPolicy().allowCloudServices) {
+    return {
+      configured: false,
+      setupMessage: 'Phorca administrator policy disables cloud services.'
+    }
+  }
   // Why: loopback HTTP endpoints are a local-development convenience only;
   // packaged builds must not accept plain-HTTP token endpoints via env vars.
   const allowLoopbackHttp = !packaged

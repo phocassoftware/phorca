@@ -13,6 +13,7 @@ import { listAvailableEmulatorDevices } from './emulator-device-inventory'
 import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import type {
   EmulatorBackend,
   EmulatorBackendCapabilities,
@@ -90,6 +91,7 @@ export class EmulatorBridge {
     worktreeId: string,
     device?: string
   ): Promise<EmulatorSessionInfo | null> {
+    assertPhorcaCapabilityAllowed('allowComputerUse')
     const active = this.getActiveForWorktree(worktreeId)
     if (!active) {
       return null
@@ -242,6 +244,7 @@ export class EmulatorBridge {
   }
 
   async acquireHelperForDevice(device: string): Promise<EmulatorStartLease> {
+    assertPhorcaCapabilityAllowed('allowComputerUse')
     const backend = await this.backendForDevice(device)
     return this.startLeases.acquire(backend, device, (info) =>
       this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid)
@@ -295,8 +298,12 @@ export class EmulatorBridge {
   }
 
   private async resolveTarget(
-    opts?: EmulatorTargetOpts
+    opts?: EmulatorTargetOpts,
+    allowCleanup = false
   ): Promise<{ backend: EmulatorBackend; device: string }> {
+    if (!allowCleanup) {
+      assertPhorcaCapabilityAllowed('allowComputerUse')
+    }
     const explicit = opts?.device ?? opts?.emulator
     if (explicit) {
       return { backend: await this.backendForDevice(explicit), device: explicit }
@@ -322,7 +329,7 @@ export class EmulatorBridge {
       const backend = await this.backendForDevice(device)
       return { backend, udid: await backend.resolveDeviceId(device) }
     }
-    const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
+    const { backend, device: resolved } = await this.resolveTarget({ worktreeId }, true)
     return { backend, udid: await backend.resolveDeviceId(resolved) }
   }
 

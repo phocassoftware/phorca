@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { isPhorcaManagedBuild } from './phorca-managed-build'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
@@ -104,6 +105,15 @@ export function normalizeTuiAgentEnvRecord(
 }
 
 export function getTuiAgentDefaultArgs(agent: TuiAgent): string {
+  if (isPhorcaManagedBuild()) {
+    if (agent === 'claude') {
+      return '--permission-mode default'
+    }
+    if (agent === 'codex') {
+      return '--ask-for-approval on-request --sandbox workspace-write'
+    }
+    return ''
+  }
   return DEFAULT_TUI_AGENT_ARGS[agent] ?? ''
 }
 
@@ -115,6 +125,9 @@ export function resolveTuiAgentLaunchArgs(
   agent: TuiAgent,
   configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
 ): string {
+  if (isPhorcaManagedBuild()) {
+    return getTuiAgentDefaultArgs(agent)
+  }
   if (
     configuredArgs &&
     Object.hasOwn(configuredArgs, agent) &&
@@ -159,6 +172,9 @@ export function resolveTuiAgentLaunchEnv(
   agent: TuiAgent,
   configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
 ): Record<string, string> {
+  if (isPhorcaManagedBuild()) {
+    return {}
+  }
   if (configuredEnv && Object.hasOwn(configuredEnv, agent)) {
     return { ...configuredEnv[agent] }
   }

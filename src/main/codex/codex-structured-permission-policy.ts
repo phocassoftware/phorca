@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-launch-defaults'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 
 export type CodexStructuredPermissionPolicy =
   | { approvalPolicy: 'never'; sandbox: 'danger-full-access' }
@@ -43,6 +44,9 @@ export function codexStructuredPermissionPolicyForSettings(
     | null
     | undefined
 ): CodexStructuredPermissionPolicy {
+  if (isPhorcaManagedBuild()) {
+    return MANUAL_POLICY
+  }
   return resolvedTuiAgentArgsBypassPermissions('codex', settings, process.platform)
     ? BYPASS_POLICY
     : MANUAL_POLICY

@@ -12,6 +12,21 @@ vi.mock('electron', () => ({
 }))
 
 describe('Orca cloud auth config', () => {
+  it('refuses managed cloud sign-in even with production credentials and environment overrides', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(
+      getOrcaCloudAuthConfig(
+        {
+          ORCA_CLOUD_API_URL: 'https://orca-cloud.example',
+          ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+        },
+        true
+      )
+    ).toEqual({
+      configured: false,
+      setupMessage: 'Phorca administrator policy disables cloud services.'
+    })
+  })
   it('reports unconfigured without both API URL and client ID', () => {
     expect(getOrcaCloudAuthConfig({})).toEqual({
       configured: false,

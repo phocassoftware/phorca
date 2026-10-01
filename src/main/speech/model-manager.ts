@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
@@ -146,6 +147,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   async downloadModel(modelId: string): Promise<void> {
+    assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
     // Why: no migration await — it never races a download, and awaiting would defer setup cancelDownload relies on.
     if (this.activeDownloads.has(modelId)) {
       return

@@ -9,6 +9,7 @@ import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isPhorcaManagedBuild } from './phorca-managed-build'
 import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 
@@ -26,12 +27,15 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): AgentStartupPlan | null {
+  if (isPhorcaManagedBuild()) {
+    args = { ...args, agentEnv: {} }
+  }
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null
   }
   const shell = resolveStartupShell(args.platform, args.shell)
-  const resolvedAgentCommand = args.agentCommand?.trim()
+  const resolvedAgentCommand = isPhorcaManagedBuild() ? null : args.agentCommand?.trim()
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,

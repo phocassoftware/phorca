@@ -53,6 +53,11 @@ class FakeChildProcess extends EventEmitter {
 }
 
 describe('computer sidecar client', () => {
+  it('refuses managed computer access before starting an OS control process', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    await expect(callComputerSidecarCapabilities()).rejects.toThrow('administrator policy')
+    expect(forkMock).not.toHaveBeenCalled()
+  })
   const children: FakeChildProcess[] = []
   let deferNextSendCallback = false
 

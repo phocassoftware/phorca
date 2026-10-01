@@ -1,4 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { chmod, mkdir, mkdtemp, open, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -283,6 +284,8 @@ async function downloadSkillPackageGrantUnobserved(
 export async function downloadSkillPackageGrant(
   input: SkillPackageDownloadInput
 ): Promise<SkillPackageDownloadResult> {
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
+  assertPhorcaCapabilityAllowed('allowCloudServices')
   const operation = startSkillPhaseOperation({
     phase: 'download',
     transport: 'download-grant',

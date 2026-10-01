@@ -3,6 +3,7 @@ import type {
   RemoteServerUpdaterSnapshot
 } from '../../shared/remote-server-update'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 
 type RemoteServerUpdaterAdapter = {
   getSnapshot: (runtimeId: string) => RemoteServerUpdaterSnapshot
@@ -51,9 +52,11 @@ export function checkRemoteServerUpdater(
 }
 
 export function downloadRemoteServerUpdater(runtimeId: string): RemoteServerUpdaterSnapshot {
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
   return adapter.download(runtimeId)
 }
 
 export function installRemoteServerUpdater(runtimeId: string): RemoteServerUpdateInstallResult {
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
   return adapter.install(runtimeId)
 }

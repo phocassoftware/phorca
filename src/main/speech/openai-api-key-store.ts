@@ -2,6 +2,7 @@ import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -42,12 +43,18 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
 }
 
 export function hasOpenAiSpeechApiKey(): boolean {
+  if (isPhorcaManagedBuild()) {
+    return false
+  }
   // Why: Settings and model-state refresh call this on startup; checking file
   // existence avoids a decrypt that triggers macOS keychain prompts.
   return existsSync(getOpenAiKeyPath())
 }
 
 export function saveOpenAiSpeechApiKey(apiKey: string): void {
+  if (isPhorcaManagedBuild()) {
+    throw new Error('Phorca disables API-key-based cloud dictation')
+  }
   const trimmed = apiKey.trim()
   if (!trimmed) {
     throw new Error('OpenAI API key is required')
@@ -65,6 +72,9 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
 }
 
 export function readOpenAiSpeechApiKey(): string {
+  if (isPhorcaManagedBuild()) {
+    throw new Error('Phorca disables API-key-based cloud dictation')
+  }
   if (cachedOpenAiSpeechApiKey !== null) {
     return cachedOpenAiSpeechApiKey
   }

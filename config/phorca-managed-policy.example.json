@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "allowComputerUse": false,
+  "allowAutomations": false,
+  "allowNetworkListeners": false,
+  "allowCloudServices": false,
+  "allowTelemetry": false,
+  "allowRuntimeDownloads": false,
+  "allowPlugins": false
+}

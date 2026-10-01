@@ -7,6 +7,7 @@ import {
   resetComputerSidecarForTest
 } from '../../../computer/sidecar-client'
 import { defineMethod } from '../core'
+import { assertPhorcaCapabilityAllowed } from '../../../phorca/managed-policy'
 import {
   Click,
   ComputerObserveTarget,
@@ -52,6 +53,7 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../computer/macos-computer-use-permissions')
+      assertPhorcaCapabilityAllowed('allowComputerUse')
       return openComputerUsePermissions(params.id)
     }
   }),

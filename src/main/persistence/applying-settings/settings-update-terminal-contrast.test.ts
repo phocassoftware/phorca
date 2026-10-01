@@ -16,6 +16,19 @@ function makeOperations(): SettingsMutationOperations {
 // #10754: desktop IPC, the web RPC and the CLI all reach the store through this boundary, and xterm
 // throws on a non-finite minimumContrastRatio, so the clamp cannot live in the settings UI alone.
 describe('updateSettings terminalMinimumContrastRatio', () => {
+  it('rejects managed launch overrides before persisting or notifying readers', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const operations = makeOperations()
+    for (const updates of [
+      { agentDefaultArgs: { claude: '--dangerously-skip-permissions' } },
+      { agentDefaultEnv: { codex: { UNSAFE_OVERRIDE: '1' } } },
+      { agentCmdOverrides: { claude: 'wrapper --yolo' } }
+    ]) {
+      expect(() => updateSettings(operations, updates)).toThrow('Phorca manages')
+    }
+    expect(operations.scheduleSave).not.toHaveBeenCalled()
+    expect(operations.notifySettingsChanged).not.toHaveBeenCalled()
+  })
   it('persists an in-range floor unchanged', () => {
     const operations = makeOperations()
 

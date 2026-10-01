@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { assertPhorcaCapabilityAllowed } from '../../phorca/managed-policy'
 import { createWriteStream, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { get } from 'node:https'
@@ -46,6 +47,7 @@ export async function ensureScrcpyServerJar(): Promise<string> {
 }
 
 async function downloadScrcpyServerJar(path: string): Promise<string> {
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
   emulatorProbe('scrcpy.jar.download.start', { url: DOWNLOAD_URL, dest: path })
   mkdirSync(dirname(path), { recursive: true })
   try {

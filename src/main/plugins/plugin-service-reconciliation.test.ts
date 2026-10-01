@@ -113,6 +113,14 @@ afterEach(async () => {
 })
 
 describe('PluginService worker reconciliation', () => {
+  it('overrides saved consent and user enablement in a managed build', async () => {
+    const root = await pluginRoot()
+    const { service, factory } = createHarness(root)
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    await service.initialize()
+    await expect(service.invokeCommand(pluginKey, 'run')).rejects.toThrow('not enabled')
+    expect(factory).not.toHaveBeenCalled()
+  })
   it('blocks every runtime surface until a saved override resolves a content conflict', async () => {
     const conflictingManifest = (id: string): PluginManifest =>
       pluginManifestSchema.parse({

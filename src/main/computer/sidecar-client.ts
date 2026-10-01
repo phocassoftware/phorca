@@ -12,6 +12,7 @@ import { normalizeComputerActionResult } from './computer-action-verification-no
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 
 type ComputerSidecarMethod =
   | 'capabilities'
@@ -93,6 +94,7 @@ export function resetComputerSidecarForTest(): void {
 }
 
 function getComputerSidecar(): ComputerSidecarProcess {
+  assertPhorcaCapabilityAllowed('allowComputerUse')
   if (!sidecar) {
     sidecar = new ComputerSidecarProcess(getComputerSidecarEntryPath())
   }

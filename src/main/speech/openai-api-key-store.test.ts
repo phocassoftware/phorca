@@ -45,6 +45,16 @@ function writeStoredOpenAiKey(value: string): void {
 }
 
 describe('OpenAI speech API key store', () => {
+  it('refuses existing and new managed keys without decrypting them', async () => {
+    writeStoredOpenAiKey('encrypted-key')
+    const store = await loadStoreModule()
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(store.hasOpenAiSpeechApiKey()).toBe(false)
+    expect(() => store.readOpenAiSpeechApiKey()).toThrow('API-key-based')
+    expect(() => store.saveOpenAiSpeechApiKey('sk-test')).toThrow('API-key-based')
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+    expect(safeStorageMock.encryptString).not.toHaveBeenCalled()
+  })
   it('checks configured status without decrypting or touching safeStorage', async () => {
     writeStoredOpenAiKey('encrypted-key')
     const store = await loadStoreModule()

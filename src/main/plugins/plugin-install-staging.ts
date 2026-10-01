@@ -23,6 +23,7 @@ import { hashPluginTree } from './plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 
 export type PluginInstallResult =
   | {
@@ -126,6 +127,7 @@ export async function installStagedPluginTree(input: {
   repairCorruptedVersion?: boolean
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
+  assertPhorcaCapabilityAllowed('allowPlugins')
   const sourceInspection = await inspectPluginInstallTree({
     rootDir: input.stagingDir,
     hostVersion: input.hostVersion,

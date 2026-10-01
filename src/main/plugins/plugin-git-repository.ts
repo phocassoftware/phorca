@@ -3,6 +3,7 @@ import {
   PLUGIN_COMMIT_PATTERN
 } from '../../shared/plugins/plugin-install-lockfile'
 import { gitExecFileAsync } from '../git/runner'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000
 
@@ -23,6 +24,8 @@ export async function checkoutPluginGitSource(input: {
   destination: string
   workingDirectory: string
 }): Promise<string> {
+  assertPhorcaCapabilityAllowed('allowPlugins')
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
   if (!isAllowedPluginGitUrl(input.url)) {
     throw new Error('plugin Git URL must use HTTPS or SSH')
   }

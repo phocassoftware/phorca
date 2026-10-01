@@ -39,6 +39,8 @@ import {
   buildWorkspaceDirHistoryForUpdate,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
+import { isPhorcaManagedBuild } from '../../../shared/phorca-managed-build'
+import { assertPhorcaCapabilityAllowed } from '../../phorca/managed-policy'
 
 export type SettingsMutationOperations = {
   state: PersistedState
@@ -55,6 +57,21 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
+  if (isPhorcaManagedBuild()) {
+    if (
+      'agentDefaultArgs' in updates ||
+      'agentDefaultEnv' in updates ||
+      'agentCmdOverrides' in updates
+    ) {
+      throw new Error('Phorca manages agent launch arguments, environment and commands')
+    }
+    if (updates.pluginSystemEnabled) {
+      assertPhorcaCapabilityAllowed('allowPlugins')
+    }
+    if (updates.artifactSharingEnabled || updates.agentSkillSharingEnabled) {
+      assertPhorcaCapabilityAllowed('allowCloudServices')
+    }
+  }
   const sanitizedUpdates = stripRetiredGlobalSettings(updates)
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)

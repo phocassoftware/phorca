@@ -1,4 +1,5 @@
 import { MacOSNativeProviderClient } from './macos-native-provider-client'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { shouldUseMacOSNativeProvider } from './macos-native-provider-availability'
 import {
   DesktopScriptProviderClient,
@@ -28,6 +29,7 @@ export class ComputerProviderLifecycle {
   constructor(private readonly deps: ComputerProviderLifecycleDeps = defaultDeps) {}
 
   current(platform: NodeJS.Platform = process.platform): ComputerProvider | null {
+    assertPhorcaCapabilityAllowed('allowComputerUse')
     if (platform === 'darwin') {
       if (this.nativeMacOSProvider) {
         return this.nativeMacOSProvider

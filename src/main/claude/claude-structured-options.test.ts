@@ -44,6 +44,24 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
 }
 
 describe('Claude structured option mutation fencing', () => {
+  it('refuses live and restored permission bypass in a managed build', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const session = sessionFor(vi.fn(async () => undefined))
+    await expect(
+      setClaudeStructuredOption(
+        session,
+        {
+          key: 'permissionMode',
+          value: 'bypassPermissions'
+        },
+        undefined
+      )
+    ).rejects.toThrow('manual approval')
+    session.options.set('permissionMode', 'bypassPermissions')
+    await restoreClaudeStructuredSessionOptions(session, undefined)
+    expect(session.options.has('permissionMode')).toBe(false)
+    expect(session.restoreSkippedOptions.has('permissionMode')).toBe(true)
+  })
   it('does not let a delayed earlier apply overwrite a later option', async () => {
     let releaseFirst!: () => void
     const firstApply = new Promise<void>((resolve) => {

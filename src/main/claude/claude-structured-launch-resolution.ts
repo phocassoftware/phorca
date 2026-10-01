@@ -26,6 +26,7 @@ import {
 } from '../native-chat/claude-structured-managed-account-support'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -82,7 +83,10 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
  */
 export function claudeStructuredPermissionOptions(
   mode: PermissionMode
-): Pick<ClaudeStructuredSdkOptions, 'extraArgs'> {
+): Pick<ClaudeStructuredSdkOptions, 'extraArgs' | 'permissionMode'> {
+  if (isPhorcaManagedBuild()) {
+    return { permissionMode: 'default' }
+  }
   return mode === 'bypassPermissions' ? { extraArgs: { 'dangerously-skip-permissions': null } } : {}
 }
 

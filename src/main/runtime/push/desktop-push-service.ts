@@ -3,6 +3,7 @@
 // alongside DesktopRelayService but deliberately not gated on cloud sign-in: the
 // gateway authenticates with the host keypair, so accountless hosts push too.
 import { randomUUID } from 'node:crypto'
+import { getPhorcaManagedPolicy } from '../../phorca/managed-policy'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -73,6 +74,9 @@ export class DesktopPushService {
 
   /** Returns null when the mobile runtime never came up, so there is nothing to push for. */
   static create(options: DesktopPushServiceOptions): DesktopPushService | null {
+    if (!getPhorcaManagedPolicy().allowCloudServices) {
+      return null
+    }
     const keypair = options.runtimeRpc.getE2EEKeypair()
     const registry = options.runtimeRpc.getDeviceRegistry()
     if (!keypair || !registry) {

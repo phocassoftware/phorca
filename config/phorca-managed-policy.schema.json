@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": { "type": "number", "const": 1 },
+    "allowComputerUse": { "default": false, "type": "boolean" },
+    "allowAutomations": { "default": false, "type": "boolean" },
+    "allowNetworkListeners": { "default": false, "type": "boolean" },
+    "allowCloudServices": { "default": false, "type": "boolean" },
+    "allowTelemetry": { "default": false, "type": "boolean" },
+    "allowRuntimeDownloads": { "default": false, "type": "boolean" },
+    "allowPlugins": { "default": false, "type": "boolean" }
+  },
+  "required": ["version"],
+  "additionalProperties": false
+}

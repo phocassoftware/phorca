@@ -303,6 +303,7 @@ export const electronViteConfig: UserConfig = {
     }
   },
   renderer: {
+    define: { PHORCA_MANAGED_BUILD: 'true' },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

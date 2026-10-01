@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import { getPhorcaManagedPolicy } from '../phorca/managed-policy'
 import {
   capabilityKinds,
   type PluginCapabilityKind
@@ -126,7 +127,7 @@ export class PluginService {
   refresh(): Promise<void> {
     // Snapshot settings at request time so a quick off→on sequence still
     // processes the off transition and revokes old workers/panel sessions.
-    const enabled = this.options.isPluginSystemEnabled()
+    const enabled = getPhorcaManagedPolicy().allowPlugins && this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
     const refresh = this.refreshChain.then(() =>
@@ -198,7 +199,7 @@ export class PluginService {
   activationState(plugin: ValidDiscoveredPlugin): ReturnType<typeof getPluginActivationState> {
     // The feature flag is an authority boundary, not only a discovery hint:
     // callers fail closed immediately even before async reconciliation ends.
-    if (!this.options.isPluginSystemEnabled()) {
+    if (!getPhorcaManagedPolicy().allowPlugins || !this.options.isPluginSystemEnabled()) {
       return 'disabled'
     }
     return getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, {
@@ -282,7 +283,11 @@ export class PluginService {
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {
-    if (!this.options.isPluginSystemEnabled() || this.disposed) {
+    if (
+      !getPhorcaManagedPolicy().allowPlugins ||
+      !this.options.isPluginSystemEnabled() ||
+      this.disposed
+    ) {
       return
     }
     deliverPluginEvent({

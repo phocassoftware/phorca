@@ -1,7 +1,7 @@
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -104,6 +104,16 @@ const RESUMABLE = record({
 })
 
 describe('claude structured launch resolution', () => {
+  it('explicitly resets managed approval mode for new and resumed sessions', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    for (const value of [record(), RESUMABLE]) {
+      const launch = await resolverFor(value, undefined, false, {
+        claude: '--dangerously-skip-permissions'
+      })({ identity: value === RESUMABLE ? identityAt('leaf-current') : IDENTITY })
+      expect(launch.options.permissionMode).toBe('default')
+      expect(launch.options.extraArgs).not.toHaveProperty('dangerously-skip-permissions')
+    }
+  })
   it('pre-mints a stable provider id and pins interactive setting sources', async () => {
     const first = await resolverFor(record())({ identity: IDENTITY })
     const second = await resolverFor(record())({ identity: IDENTITY })

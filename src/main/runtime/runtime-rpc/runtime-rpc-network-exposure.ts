@@ -1,4 +1,5 @@
 import { WebSocketTransport } from '../rpc/ws-transport'
+import { assertPhorcaCapabilityAllowed } from '../../phorca/managed-policy'
 import { writeWsFallbackPort } from '../rpc/ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
@@ -10,6 +11,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
   // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
   // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
   async ensureNetworkExposure(): Promise<void> {
+    assertPhorcaCapabilityAllowed('allowNetworkListeners')
     if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
       // Why throw and not return: callers widen so they can ADVERTISE a LAN endpoint. Returning
       // quietly would let them publish one that nothing can reach; the throw lands in their

@@ -8,6 +8,11 @@ import {
 } from './remote-server-updater'
 
 describe('remote server updater adapter', () => {
+  it('refuses managed downloads and installation before consulting the adapter', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    expect(() => downloadRemoteServerUpdater('runtime-1')).toThrow('administrator policy')
+    expect(() => installRemoteServerUpdater('runtime-1')).toThrow('administrator policy')
+  })
   it('defaults to a safe manual-only implementation', () => {
     expect(getRemoteServerUpdaterSnapshot('runtime-1')).toMatchObject({
       runtimeId: 'runtime-1',

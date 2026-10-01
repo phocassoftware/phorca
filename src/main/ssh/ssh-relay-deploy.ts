@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
 import { existsSync } from 'node:fs'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
@@ -1161,6 +1162,7 @@ async function installNativeDeps(
     )
   }
 
+  assertPhorcaCapabilityAllowed('allowRuntimeDownloads')
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
       .map(([dep, version]) => shellEscape(`${dep}@${version}`))

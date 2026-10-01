@@ -13,6 +13,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { assertPhorcaCapabilityAllowed } from '../../../../../phorca/managed-policy'
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
@@ -22,6 +23,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       params,
       { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
     ) => {
+      assertPhorcaCapabilityAllowed('allowAutomations')
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
           'invalid_argument',

@@ -1,4 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { getPhorcaManagedPolicy } from '../../phorca/managed-policy'
+import { isPhorcaManagedBuild } from '../../../shared/phorca-managed-build'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/constants'
@@ -18,6 +21,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { getTuiAgentDefaultArgs } from '../../../shared/tui-agent-launch-defaults'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
@@ -44,7 +48,40 @@ export class ProfilePreferences {
   }
 
   getSettings(): GlobalSettings {
-    return this[profilePreferencesContext].runtime.state.settings
+    const settings = this[profilePreferencesContext].runtime.state.settings
+    if (!isPhorcaManagedBuild()) {
+      return settings
+    }
+    const policy = getPhorcaManagedPolicy()
+    return {
+      ...settings,
+      pluginSystemEnabled: policy.allowPlugins && settings.pluginSystemEnabled,
+      mobileEmulatorEnabled: policy.allowComputerUse && settings.mobileEmulatorEnabled,
+      defaultTuiAgent:
+        settings.defaultTuiAgent !== null &&
+        settings.defaultTuiAgent !== 'blank' &&
+        settings.defaultTuiAgent !== 'claude' &&
+        settings.defaultTuiAgent !== 'codex'
+          ? 'blank'
+          : settings.defaultTuiAgent,
+      disabledTuiAgents: Object.keys(TUI_AGENT_CONFIG)
+        .filter(isTuiAgent)
+        .filter(
+          (agent) =>
+            (agent !== 'claude' && agent !== 'codex') || settings.disabledTuiAgents.includes(agent)
+        ),
+      agentCmdOverrides: {},
+      agentDefaultArgs: {
+        claude: getTuiAgentDefaultArgs('claude'),
+        codex: getTuiAgentDefaultArgs('codex')
+      },
+      agentDefaultEnv: {},
+      mobilePairingConnectionMode: policy.allowCloudServices
+        ? settings.mobilePairingConnectionMode
+        : 'local-only',
+      artifactSharingEnabled: policy.allowCloudServices && settings.artifactSharingEnabled,
+      agentSkillSharingEnabled: policy.allowCloudServices && settings.agentSkillSharingEnabled
+    }
   }
 
   onSettingsChanged(
@@ -71,7 +108,8 @@ export class ProfilePreferences {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
+    updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
+    return this.getSettings()
   }
 
   getUI(): PersistedState['ui'] {
@@ -136,8 +174,15 @@ export function notifySettingsChanged(
   updates: Partial<GlobalSettings>,
   originWebContentsId?: number
 ): void {
+  const settings = owner.getSettings()
+  const effectiveUpdates: Partial<GlobalSettings> = { ...updates }
+  for (const key of Object.keys(updates)) {
+    if (Object.hasOwn(settings, key)) {
+      Reflect.set(effectiveUpdates, key, Reflect.get(settings, key))
+    }
+  }
   for (const listener of owner[profilePreferencesContext].runtime.settingsChangeListeners) {
-    listener(updates, owner[profilePreferencesContext].runtime.state.settings, originWebContentsId)
+    listener(effectiveUpdates, settings, originWebContentsId)
   }
 }
 

@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { assertPhorcaCapabilityAllowed, getPhorcaManagedPolicy } from '../phorca/managed-policy'
 
 /** All the service asks of the renderer: is it still there, and take this message. Narrower
  *  than WebContents so a test can supply the real shape instead of casting one. */
@@ -111,6 +112,9 @@ export class AutomationService {
   }
 
   start(): void {
+    if (!getPhorcaManagedPolicy().allowAutomations) {
+      return
+    }
     if (this.timer) {
       return
     }
@@ -139,6 +143,7 @@ export class AutomationService {
   }
 
   async runNow(automationId: string): Promise<AutomationRun> {
+    assertPhorcaCapabilityAllowed('allowAutomations')
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!automation) {
       throw new Error('Automation not found.')
@@ -224,6 +229,9 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
+    if (!getPhorcaManagedPolicy().allowAutomations) {
+      return
+    }
     if (this.evaluating) {
       return
     }

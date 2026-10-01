@@ -11,6 +11,8 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
+import { isPhorcaManagedBuild } from './phorca-managed-build'
+import { getTuiAgentDefaultArgs } from './tui-agent-launch-defaults'
 
 export type ResolvedAgentLaunchCommand =
   | {
@@ -31,6 +33,12 @@ export function resolveAgentLaunchCommand(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
+  if (isPhorcaManagedBuild()) {
+    if (args.agent !== 'claude' && args.agent !== 'codex') {
+      return { ok: false, error: 'Managed Phorca launches support only Claude and Codex.' }
+    }
+    args = { ...args, cmdOverrides: {}, agentArgs: getTuiAgentDefaultArgs(args.agent) }
+  }
   const override = args.cmdOverrides[args.agent]
   const command =
     override ||

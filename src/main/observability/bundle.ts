@@ -7,6 +7,8 @@
 // upload body-size cap, token-handling discipline).
 
 import { randomBytes } from 'node:crypto'
+import { getPhorcaManagedPolicy } from '../phorca/managed-policy'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 import { readFileSync, statSync } from 'node:fs'
 import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { listRotatedFiles } from './local-file-sink'
@@ -86,7 +88,11 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
     schema_version: 1
   }
 
-  const headerLine = JSON.stringify({ type: 'bundle-header', ...header })
+  const headerLine = JSON.stringify({
+    type: 'bundle-header',
+    ...header,
+    ...(isPhorcaManagedBuild() ? { phorca_policy: getPhorcaManagedPolicy() } : {})
+  })
   const lines: string[] = [headerLine]
   let spanCount = 0
   // Track bytes incrementally to avoid an O(N²) `lines.join('\n').length` per span.

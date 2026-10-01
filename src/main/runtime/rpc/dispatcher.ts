@@ -23,6 +23,8 @@ import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
+import { startSpan } from '../../observability/tracer'
+import { isPhorcaManagedBuild } from '../../../shared/phorca-managed-build'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -86,6 +88,9 @@ export class RpcDispatcher {
     if (request.method.startsWith('emulator.')) {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
+    const audit = isPhorcaManagedBuild() ? startSpan('phorca.rpc.action') : null
+    audit?.setAttribute('method', request.method)
+    audit?.setAttribute('clientKind', options?.clientKind ?? 'local')
     try {
       const result = await invokeDispatcherUnaryMethod({
         runtime: this.runtime,
@@ -107,12 +112,17 @@ export class RpcDispatcher {
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration
       })
+      audit?.setAttribute('outcome', 'success')
       return successResponse(request.id, meta, result)
     } catch (error) {
+      audit?.setAttribute('outcome', 'error')
+      audit?.fail('Action failed')
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
       }
       return mapDispatcherError(request, meta, error)
+    } finally {
+      audit?.end()
     }
   }
 

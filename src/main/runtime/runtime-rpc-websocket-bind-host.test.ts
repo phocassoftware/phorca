@@ -27,6 +27,24 @@ vi.mock('../git/worktree', () => {
 })
 
 describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
+  it('keeps managed serve on loopback and refuses pairing-time network exposure', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'phorca-managed-rpc-')),
+      enableWebSocket: true,
+      wsPort: 0,
+      exposeNetworkByDefault: true
+    })
+    await server.start()
+    try {
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
+      await expect(server.ensureNetworkExposure()).rejects.toThrow('administrator policy')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
   const wsTransportOf = (server: OrcaRuntimeRpcServer): WebSocketTransport | undefined =>
     (server['activeTransports'] as unknown[]).find(
       (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport

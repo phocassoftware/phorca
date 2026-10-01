@@ -1,4 +1,5 @@
 import { StaleRelayBrokerError } from './relay-session-broker-contract'
+import { assertPhorcaCapabilityAllowed } from '../../phorca/managed-policy'
 export { StaleRelayBrokerError } from './relay-session-broker-contract'
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
@@ -71,6 +72,7 @@ export class RelaySessionBroker {
   }
 
   static async connect(options: RelaySessionBrokerOptions): Promise<RelaySessionBroker> {
+    assertPhorcaCapabilityAllowed('allowCloudServices')
     const broker = new RelaySessionBroker(options)
     try {
       await broker.open(options.accessToken)

@@ -14,6 +14,7 @@ import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
+import { getPhorcaManagedPolicy } from '../phorca/managed-policy'
 import { commonPropsSchema, validate } from './validator'
 
 // Compile-time feature flag, independent of the build-identity gate — both must be satisfied to transmit.
@@ -71,7 +72,7 @@ export function initTelemetry(store: Store): void {
   // Reset per session: the "no app_opened until banner resolution" invariant is per-launch, not per-install.
   appOpenedTrackedThisSession = false
 
-  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD) {
+  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || !getPhorcaManagedPolicy().allowTelemetry) {
     return
   }
 
@@ -162,6 +163,9 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
 
 // No-op in contributor / non-official builds; only official stable/rc builds (CI-injected `ORCA_BUILD_IDENTITY` + `ORCA_POSTHOG_WRITE_KEY`) transmit.
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
+  if (!getPhorcaManagedPolicy().allowTelemetry) {
+    return
+  }
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
     return
   }
@@ -220,6 +224,9 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     }
   })
 
+  if (!getPhorcaManagedPolicy().allowTelemetry) {
+    return
+  }
   const client = posthog
   if (optedIn) {
     if (client) {
@@ -279,7 +286,7 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
       optedIn: true
     }
   })
-  if (posthog) {
+  if (posthog && getPhorcaManagedPolicy().allowTelemetry) {
     await posthog.optIn()
   }
   // Why: banner resolution is the first eligible moment for app_opened; SDK re-enabled above so capture sees the new consent.

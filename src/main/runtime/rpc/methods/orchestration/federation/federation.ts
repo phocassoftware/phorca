@@ -3,6 +3,7 @@ import { describeTerminalWaitBlockedReason } from '../../../../../../shared/term
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
+import { assertPhorcaCapabilityAllowed } from '../../../../../phorca/managed-policy'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -30,6 +31,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     name: 'orchestration.federationAttachStart',
     params: FederationAttachStartParams,
     handler: async (params, { runtime, orchestrationMutation }) => {
+      assertPhorcaCapabilityAllowed('allowAutomations')
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',

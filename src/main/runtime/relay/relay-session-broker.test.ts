@@ -102,6 +102,15 @@ function deferred<T>() {
 }
 
 describe('RelaySessionBroker lifecycle ownership', () => {
+  it('refuses managed relay registration before exchanging credentials or opening sockets', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    await expect(RelaySessionBroker.connect(brokerOptions())).rejects.toThrow(
+      'administrator policy'
+    )
+    expect(fakes.exchange).not.toHaveBeenCalled()
+    expect(fakes.assign).not.toHaveBeenCalled()
+    expect(fakes.controls).toHaveLength(0)
+  })
   beforeEach(() => {
     fakes.controls.length = 0
     fakes.transports.length = 0

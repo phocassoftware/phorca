@@ -47,6 +47,14 @@ type ModelManagerInternals = {
 }
 
 describe('ModelManager', () => {
+  it('refuses managed model downloads before opening a network request', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const manager = new ModelManager(mkdtempSync(join(tmpdir(), 'phorca-models-')))
+    await expect(manager.downloadModel(SPEECH_MODEL_CATALOG[0]!.id)).rejects.toThrow(
+      'administrator policy'
+    )
+    expect(netRequestMock).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()

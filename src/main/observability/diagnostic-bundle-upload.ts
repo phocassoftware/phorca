@@ -1,4 +1,5 @@
 import { URL } from 'node:url'
+import { assertPhorcaCapabilityAllowed } from '../phorca/managed-policy'
 import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { postBodyForJson, postJsonForJson } from './diagnostic-upload-http'
 
@@ -40,6 +41,7 @@ type UploadResponse = {
  * surfaces them in the renderer toast.
  */
 export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBundleResult> {
+  assertPhorcaCapabilityAllowed('allowCloudServices')
   const bytes = Buffer.byteLength(opts.payload)
   if (bytes > MAX_BUNDLE_BYTES) {
     throw new Error(`bundle exceeds 4 MiB cap (${bytes} bytes)`)

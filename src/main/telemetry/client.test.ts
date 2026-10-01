@@ -40,6 +40,12 @@ describe('track()', () => {
     }
   })
 
+  it('does not capture managed telemetry even with an initialized transport and saved opt-in', () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    track('app_opened', {})
+    expect(mock.capture).not.toHaveBeenCalled()
+  })
+
   // Drift-check: the full set of keys on the capture payload is bounded by
   // CommonProps, EventProps, and {$process_person_profile}. A future SDK
   // upgrade widening `properties` should fail loudly for review.

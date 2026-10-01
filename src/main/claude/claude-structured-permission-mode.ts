@@ -1,6 +1,7 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-launch-defaults'
+import { isPhorcaManagedBuild } from '../../shared/phorca-managed-build'
 
 /**
  * The Agent Permissions setting as the SDK's own permission mode.
@@ -20,6 +21,9 @@ export function claudeStructuredPermissionModeForSettings(
     | null
     | undefined
 ): PermissionMode {
+  if (isPhorcaManagedBuild()) {
+    return 'default'
+  }
   return resolvedTuiAgentArgsBypassPermissions('claude', settings, process.platform)
     ? 'bypassPermissions'
     : 'default'

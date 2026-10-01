@@ -74,6 +74,14 @@ function session(deviceUdid: string): EmulatorSessionInfo {
 }
 
 describe('EmulatorBridge helper ownership', () => {
+  it('refuses managed emulator control and startup before backend operations', async () => {
+    vi.stubGlobal('PHORCA_MANAGED_BUILD', true)
+    const bridge = new EmulatorBridge()
+    await expect(bridge.tap(1, 2, { device: 'device-1' })).rejects.toThrow('administrator policy')
+    await expect(bridge.exec('id', { device: 'device-1' })).rejects.toThrow('administrator policy')
+    await expect(bridge.acquireHelperForDevice('device-1')).rejects.toThrow('administrator policy')
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     execServeSimCommandMock.mockReset()
     execServeSimCommandMock.mockImplementation(async () => ({}))

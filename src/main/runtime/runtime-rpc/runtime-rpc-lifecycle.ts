@@ -1,4 +1,5 @@
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
+import { assertPhorcaCapabilityAllowed, getPhorcaManagedPolicy } from '../../phorca/managed-policy'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
@@ -144,6 +145,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   protected resolveInitialWebSocketBindHost(): string {
+    if (!getPhorcaManagedPolicy().allowNetworkListeners) {
+      return WS_BIND_HOST_LOOPBACK
+    }
     if (this.pinnedBindHost) {
       return this.pinnedBindHost
     }
@@ -165,6 +169,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     preferPinnedPort: boolean
     fallbackPort?: number
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
+    if (options.host !== '127.0.0.1' && options.host !== '::1') {
+      assertPhorcaCapabilityAllowed('allowNetworkListeners')
+    }
     const deviceRegistry = this.deviceRegistry
     const e2eeKeypair = this.e2eeKeypair
     if (!deviceRegistry || !e2eeKeypair) {
