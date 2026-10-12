@@ -39,6 +39,9 @@ describe('local build compatibility', () => {
     expect(() => parseLocalBuildCompatibility(target({ appId: 'other.app' }))).toThrow(
       'invalid compatibility metadata'
     )
+    expect(() => parseLocalBuildCompatibility(target({ appId: 'com.stablyai.orca' }))).toThrow(
+      'invalid compatibility metadata'
+    )
     expect(() =>
       parseLocalBuildCompatibility(target({ attachableDaemonProtocolVersions: [] }))
     ).toThrow('invalid compatibility metadata')

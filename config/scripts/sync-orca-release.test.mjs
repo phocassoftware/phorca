@@ -208,6 +208,7 @@ function fixture({ keepWorkflows = true } = {}) {
     local,
     remoteHead,
     addRelease,
+    upstreamGit: (args) => checked(upstream, args),
     setReleases: (items) => {
       releases = items
     }
@@ -215,6 +216,77 @@ function fixture({ keepWorkflows = true } = {}) {
 }
 
 describe('Orca sync with real Git repositories', () => {
+  it('rejects duplicate open PRs before release lookup or Git changes', async () => {
+    const github = {
+      paginate: vi.fn().mockResolvedValue([{ state: 'open' }, { state: 'open' }]),
+      rest: { pulls: { list: vi.fn(), create: vi.fn(), update: vi.fn() }, repos: {} }
+    }
+    const git = vi.fn()
+    await expect(
+      syncOrcaRelease({
+        github,
+        git,
+        repo: { owner: 'phocassoftware', repo: 'phorca' },
+        base: 'main'
+      })
+    ).rejects.toThrow('More than one Orca sync PR is open')
+    expect(github.paginate).toHaveBeenCalledOnce()
+    expect(git).not.toHaveBeenCalled()
+    expect(github.rest.pulls.create).not.toHaveBeenCalled()
+    expect(github.rest.pulls.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects a dirty checkout before fetch, push or PR changes', async () => {
+    const f = fixture()
+    writeFileSync(join(f.checkout, 'untracked.txt'), 'keep this work\n')
+    await expect(f.sync()).rejects.toThrow('clean, disposable workflow checkout')
+    expect(f.git.mock.calls.map(([args]) => args[0])).toEqual(['status'])
+    expect(f.github.rest.pulls.create).not.toHaveBeenCalled()
+    expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
+    expect(readFileSync(join(f.checkout, 'untracked.txt'), 'utf8')).toBe('keep this work\n')
+  })
+
+  it('validates malformed override tags before any API or Git calls', async () => {
+    const github = { paginate: vi.fn(), rest: { repos: { getReleaseByTag: vi.fn() } } }
+    const git = vi.fn()
+    await expect(syncOrcaRelease({ github, git, overrideTag: 'main; injected' })).rejects.toThrow(
+      'Override must be a stable desktop tag: vX.Y.Z.'
+    )
+    expect(github.paginate).not.toHaveBeenCalled()
+    expect(github.rest.repos.getReleaseByTag).not.toHaveBeenCalled()
+    expect(git).not.toHaveBeenCalled()
+  })
+
+  it.each([404, 401, 503, undefined])(
+    'reports override lookup errors with tag context (%s)',
+    async (status) => {
+      const lookupError = Object.assign(new Error('Lookup unavailable'), { status })
+      const github = {
+        paginate: vi.fn().mockResolvedValue([]),
+        rest: {
+          pulls: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
+          repos: { getReleaseByTag: vi.fn().mockRejectedValue(lookupError) }
+        }
+      }
+      const git = vi.fn()
+      const result = syncOrcaRelease({
+        github,
+        git,
+        repo: { owner: 'phocassoftware', repo: 'phorca' },
+        overrideTag: 'v1.4.224'
+      })
+      await expect(result).rejects.toThrow(
+        status === 404
+          ? 'No published stable desktop release exists for v1.4.224.'
+          : 'Looking up Orca v1.4.224 failed: Lookup unavailable'
+      )
+      await expect(result).rejects.toHaveProperty('cause', lookupError)
+      expect(git).not.toHaveBeenCalled()
+      expect(github.rest.pulls.create).not.toHaveBeenCalled()
+      expect(github.rest.pulls.update).not.toHaveBeenCalled()
+    }
+  )
+
   it('creates one PR from the release and a merge retains both upstream and Phorca changes', async () => {
     const f = fixture()
     expect(await f.sync()).toContain('Created')
@@ -290,19 +362,27 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.github.rest.pulls.create).toHaveBeenCalledOnce()
   })
 
-  it('starts the next PR after a merge, even when the update branch was deleted', async () => {
-    const f = fixture()
-    await f.sync()
-    f.local(['checkout', 'main'])
-    f.local(['merge', '--no-edit', ORCA_SYNC_BRANCH])
-    f.local(['push', 'origin', 'main', `:refs/heads/${ORCA_SYNC_BRANCH}`])
-    f.pulls[0].state = 'closed'
-    f.pulls[0].merged_at = '2026-10-12T00:00:00Z'
-    f.addRelease('v1.4.224', 'next')
-    f.setReleases([release('v1.4.224')])
-    expect(await f.sync()).toContain('Created')
-    expect(f.pulls.filter((pull) => pull.state === 'open')).toHaveLength(1)
-  })
+  it.each([true, false])(
+    'starts the next PR after a merge (branch deleted: %s)',
+    async (deleted) => {
+      const f = fixture()
+      await f.sync()
+      f.local(['checkout', 'main'])
+      f.local(['merge', '--no-edit', ORCA_SYNC_BRANCH])
+      const previous = f.remoteHead()
+      f.local(['push', 'origin', 'main', ...(deleted ? [`:refs/heads/${ORCA_SYNC_BRANCH}`] : [])])
+      f.pulls[0].state = 'closed'
+      f.pulls[0].merged_at = '2026-10-12T00:00:00Z'
+      f.addRelease('v1.4.224', 'next')
+      f.setReleases([release('v1.4.224')])
+      expect(await f.sync()).toContain('Created')
+      expect(f.pulls.filter((pull) => pull.state === 'open')).toHaveLength(1)
+      expect(f.local(['rev-parse', 'HEAD^'])).toBe(
+        f.local(['rev-parse', 'refs/remotes/orca-sync/release'])
+      )
+      expect((await f.git(['merge-base', '--is-ancestor', previous, 'HEAD'])).exitCode).toBe(1)
+    }
+  )
 
   it('bypasses the wait only for an explicit tag, and recovers after a failed PR API call', async () => {
     const f = fixture()
@@ -352,6 +432,80 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.pulls[0].title).toContain('v1.4.224')
     expect(f.pulls[0].body).toBe(body)
     expect(f.remoteHead()).toBe(head)
+    expect(f.github.rest.pulls.update).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a newer manual release on a divergent history while still refreshing workflows', async () => {
+    const f = fixture()
+    f.addRelease('v1.4.225', 'younger')
+    f.setReleases([release('v1.4.225', 1)])
+    await f.sync({ manual: true, overrideTag: 'v1.4.225' })
+    const body = f.pulls[0].body
+    const head = f.remoteHead()
+    f.upstreamGit(['checkout', '-b', 'older-line', 'v1.4.223'])
+    f.addRelease('v1.4.224', 'divergent older release')
+    f.setReleases([release('v1.4.224'), release('v1.4.225', 1)])
+    expect(await f.sync()).toContain('v1.4.225')
+    expect(f.remoteHead()).toBe(head)
+    expect(f.pulls[0].body).toBe(body)
+    f.local(['checkout', 'main'])
+    writeFileSync(join(f.checkout, '.github', 'workflows', 'ci.yml'), 'Reviewed Phorca CI\n')
+    f.local(['add', '.'])
+    f.local(['commit', '-m', 'Review Phorca CI'])
+    f.local(['push', 'origin', 'main'])
+    expect(await f.sync({ manual: true, overrideTag: 'v1.4.224' })).toContain('v1.4.225')
+    expect(f.remoteHead()).not.toBe(head)
+    expect(f.pulls[0].title).toContain('v1.4.225')
+    expect(f.pulls[0].body).toBe(body)
+    expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
+      f.local(['rev-parse', 'origin/main:.github/workflows'])
+    )
+    expect(
+      (await f.git(['merge-base', '--is-ancestor', 'refs/remotes/orca-sync/release', 'HEAD']))
+        .exitCode
+    ).toBe(1)
+    expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
+  })
+
+  it('requires repair instead of replacing a missing newer update branch or its release markers', async () => {
+    const f = fixture()
+    f.addRelease('v1.4.224', 'younger')
+    f.setReleases([release('v1.4.223'), release('v1.4.224', 1)])
+    await f.sync({ manual: true, overrideTag: 'v1.4.224' })
+    const body = f.pulls[0].body
+    for (const previous of [
+      'Reviewer note without markers',
+      '<!-- orca-sync:end -->\n<!-- orca-sync:start -->\nReviewer note'
+    ]) {
+      f.pulls[0].body = previous
+      f.git.mockClear()
+      await expect(f.sync()).rejects.toThrow('running manually with tag v1.4.224')
+      expect(f.git).not.toHaveBeenCalled()
+    }
+    f.pulls[0].body = body
+    f.local(['push', 'origin', `:refs/heads/${ORCA_SYNC_BRANCH}`])
+    f.git.mockClear()
+    await expect(f.sync()).rejects.toThrow('Restore the update branch')
+    expect(
+      f.git.mock.calls.some(([args]) => ['checkout', 'commit', 'push'].includes(args[0]))
+    ).toBe(false)
+    expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'Reviewer note',
+    '<!-- orca-sync:start -->\nReviewer note',
+    '<!-- orca-sync:end -->\nReviewer note'
+  ])('repairs missing PR description markers without losing %s', async (previous) => {
+    const f = fixture()
+    await f.sync()
+    f.pulls[0].body = previous
+    const head = f.remoteHead()
+    await f.sync()
+    expect(f.pulls[0].body).toContain('[Orca v1.4.223]')
+    expect(f.pulls[0].body).toContain(previous)
+    expect(f.remoteHead()).toBe(head)
+    await f.sync()
     expect(f.github.rest.pulls.update).toHaveBeenCalledOnce()
   })
 

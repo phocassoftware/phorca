@@ -13,11 +13,42 @@ import {
   LOC_HANDS_OFF_COMMENT,
   isTestPath,
   mergeLocBlock,
+  mergeMarkedBlock,
   renderLocBlock,
   sumChangedFiles
 } from '../../.github/scripts/pr-test-loc-table.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
+describe('managed PR body blocks', () => {
+  const start = '<!-- release:start -->'
+  const end = '<!-- release:end -->'
+  const block = `${start}\nNew release\n${end}`
+
+  it('replaces only the managed block and keeps notes on both sides', () => {
+    const current = `Prefix note\n${start}\nOld release\n${end}\n\nReviewer note\n`
+    const next = mergeMarkedBlock(current, block, start, end)
+    expect(next).toBe(`Prefix note\n${block}\n\nReviewer note\n`)
+    expect(mergeMarkedBlock(next, block, start, end)).toBe(next)
+  })
+
+  it.each(['Reviewer note', `${start}\nReviewer note`, `${end}\nReviewer note`])(
+    'repairs a missing marker pair while preserving %s',
+    (current) => {
+      const next = mergeMarkedBlock(current, block, start, end)
+      expect(next).toBe(`${block}\n\n${current}`)
+      expect(mergeMarkedBlock(next, block, start, end)).toBe(next)
+    }
+  )
+
+  it('handles an empty body and ignores an orphan end marker before a valid block', () => {
+    expect(mergeMarkedBlock(null, block, start, end)).toBe(`${block}\n`)
+    expect(mergeMarkedBlock(`${start}\nOld\n${end}`, block, start, end)).toBe(`${block}\n`)
+    expect(mergeMarkedBlock(`${end}\n${start}\nOld\n${end}\nNote`, block, start, end)).toBe(
+      `${end}\n${block}\n\nNote`
+    )
+  })
+})
 const locScript = join(projectDir, '.github/scripts/pr-test-loc-summary.mjs')
 const locWorkflow = parse(
   readFileSync(join(projectDir, '.github/workflows/pr-test-loc.yml'), 'utf8')

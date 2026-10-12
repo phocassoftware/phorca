@@ -1,52 +1,47 @@
+import { mergeMarkedBlock } from '../../.github/scripts/pr-test-loc-table.mjs'
+import {
+  compareDesktopStableTags,
+  latestStableDesktopRelease,
+  parseDesktopStableTag
+} from './latest-stable-release.mjs'
+
 export const ORCA_SYNC_BRANCH = 'codex/AI-101-orca-release-sync'
 const UPSTREAM = { owner: 'stablyai', repo: 'orca' }
 const RELEASE_REF = 'refs/remotes/orca-sync/release'
 const MINIMUM_AGE_MS = 72 * 60 * 60 * 1000
-const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const BODY_START = '<!-- orca-sync:start -->'
 const BODY_END = '<!-- orca-sync:end -->'
 
-function compareVersions(left, right) {
-  return left.map((part, index) => part - right[index]).find((part) => part !== 0) ?? 0
+function validateOverrideTag(tag) {
+  if (tag && !parseDesktopStableTag(tag)) {
+    throw new Error('Override must be a stable desktop tag: vX.Y.Z.')
+  }
 }
 
-function stableVersion(release) {
-  const match = STABLE_TAG.exec(release.tag_name)
-  if (!match || release.draft || release.prerelease || !release.published_at) {
-    return null
-  }
-  const version = match.slice(1).map(Number)
-  return version.every(Number.isSafeInteger) && Number.isFinite(Date.parse(release.published_at))
-    ? version
-    : null
+function isPublishedStableRelease(release) {
+  return Boolean(
+    parseDesktopStableTag(release?.tag_name ?? '') &&
+    !release.draft &&
+    !release.prerelease &&
+    release.published_at &&
+    Number.isFinite(Date.parse(release.published_at))
+  )
 }
 
 export function selectOrcaRelease(releases, { now = Date.now(), overrideTag = '' } = {}) {
+  validateOverrideTag(overrideTag)
   if (overrideTag) {
-    if (!STABLE_TAG.test(overrideTag)) {
-      throw new Error('Override must be a stable desktop tag: vX.Y.Z.')
-    }
     const release = releases.find((candidate) => candidate.tag_name === overrideTag)
-    if (!release || !stableVersion(release)) {
+    if (!isPublishedStableRelease(release)) {
       throw new Error(`No published stable desktop release exists for ${overrideTag}.`)
     }
     return release
   }
 
-  let selected = null
-  let selectedVersion = null
-  for (const release of releases) {
-    const version = stableVersion(release)
-    if (!version || Date.parse(release.published_at) > now - MINIMUM_AGE_MS) {
-      continue
-    }
-    const difference = selectedVersion ? compareVersions(version, selectedVersion) : 1
-    if (difference > 0) {
-      selected = release
-      selectedVersion = version
-    }
-  }
-  return selected
+  return latestStableDesktopRelease(releases, {
+    isEligible: (release) =>
+      isPublishedStableRelease(release) && Date.parse(release.published_at) <= now - MINIMUM_AGE_MS
+  })
 }
 
 function releaseDescription(release, overrideTag) {
@@ -108,13 +103,10 @@ Closing this PR also pauses updates until a manual workflow run.
 }
 
 function updatedDescription(previous, next) {
-  const start = previous?.indexOf(BODY_START) ?? -1
-  const end = previous?.indexOf(BODY_END, start) ?? -1
-  if (start < 0 || end < 0) {
-    return previous ?? next
-  }
   const nextEnd = next.indexOf(BODY_END) + BODY_END.length
-  return previous.slice(0, start) + next.slice(0, nextEnd) + previous.slice(end + BODY_END.length)
+  return previous?.trim()
+    ? mergeMarkedBlock(previous, next.slice(0, nextEnd), BODY_START, BODY_END)
+    : next
 }
 
 export async function syncOrcaRelease({
@@ -126,6 +118,7 @@ export async function syncOrcaRelease({
   overrideTag = '',
   now = Date.now()
 }) {
+  validateOverrideTag(overrideTag)
   const runGit = async (args, allowedCodes = [0]) => {
     const result = await git(args)
     if (!allowedCodes.includes(result.exitCode)) {
@@ -171,12 +164,43 @@ export async function syncOrcaRelease({
     return `Updates paused because ${pull.html_url} was closed without merging. Run manually to resume.`
   }
 
-  const releases = overrideTag
-    ? [(await github.rest.repos.getReleaseByTag({ ...UPSTREAM, tag: overrideTag })).data]
-    : await github.paginate(github.rest.repos.listReleases, { ...UPSTREAM, per_page: 100 })
+  let releases
+  if (overrideTag) {
+    try {
+      releases = [(await github.rest.repos.getReleaseByTag({ ...UPSTREAM, tag: overrideTag })).data]
+    } catch (error) {
+      if (error?.status === 404) {
+        throw new Error(`No published stable desktop release exists for ${overrideTag}.`, {
+          cause: error
+        })
+      }
+      throw new Error(`Looking up Orca ${overrideTag} failed: ${error?.message ?? error}`, {
+        cause: error
+      })
+    }
+  } else {
+    releases = await github.paginate(github.rest.repos.listReleases, { ...UPSTREAM, per_page: 100 })
+  }
   const release = selectOrcaRelease(releases, { now, overrideTag })
   if (!release) {
     return 'No stable desktop Orca release is at least 72 hours old.'
+  }
+
+  const generatedBodyParts = pull?.body?.split(BODY_START)[1]?.split(BODY_END) ?? []
+  const generatedBody = generatedBodyParts[0] ?? ''
+  const describedTag =
+    /\[Orca ([^\]]+)\]/.exec(generatedBody)?.[1] ??
+    /Update Phorca to Orca (\S+)/.exec(pull?.title ?? '')?.[1] ??
+    ''
+  const describedVersion = parseDesktopStableTag(describedTag)
+  const keepNewerRelease =
+    !pull?.merged_at &&
+    describedVersion &&
+    compareDesktopStableTags(parseDesktopStableTag(release.tag_name), describedVersion) < 0
+  if (keepNewerRelease && generatedBodyParts.length < 2) {
+    throw new Error(
+      `Restore the PR's release markers by running manually with tag ${describedTag}.`
+    )
   }
 
   if ((await runGit(['status', '--porcelain'])).stdout.trim()) {
@@ -203,13 +227,18 @@ export async function syncOrcaRelease({
     // Only retire a branch whose entire history is already safely in Phorca.
     preserveBranch = !(await ancestor(expectedHead, baseRef))
   }
+  if (keepNewerRelease && !preserveBranch) {
+    throw new Error(
+      `Restore the update branch for the PR's newer Orca ${describedTag} before syncing.`
+    )
+  }
 
   await runGit(['config', 'user.name', 'github-actions[bot]'])
   await runGit(['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'])
   let changed = true
   if (preserveBranch) {
     await runGit(['checkout', '-B', ORCA_SYNC_BRANCH, expectedHead])
-    changed = !(await ancestor(releaseSha, 'HEAD'))
+    changed = !keepNewerRelease && !(await ancestor(releaseSha, 'HEAD'))
     if (changed) {
       await runGit(['merge', '--no-commit', '--no-ff', releaseSha], [0, 1])
       await restoreWorkflows(baseRef)
@@ -247,14 +276,8 @@ export async function syncOrcaRelease({
   const description = releaseDescription(release, overrideTag)
   const title = `AI-101 Update Phorca to Orca ${release.tag_name}`
   if (pull && !pull.merged_at) {
-    const generatedBody = pull.body?.split(BODY_START)[1]?.split(BODY_END)[0] ?? ''
-    const describedTag = /\[Orca (v\d+\.\d+\.\d+)\]/.exec(generatedBody)?.[1] ?? ''
-    const describedVersion = STABLE_TAG.exec(describedTag)?.slice(1).map(Number)
-    // A manually selected younger release must not be relabelled as an older automatic candidate.
-    const refreshRelease =
-      changed || !describedVersion || compareVersions(stableVersion(release), describedVersion) >= 0
-    const desiredTitle = refreshRelease ? title : pull.title
-    const desiredBody = refreshRelease ? updatedDescription(pull.body, description) : pull.body
+    const desiredTitle = keepNewerRelease ? pull.title : title
+    const desiredBody = keepNewerRelease ? pull.body : updatedDescription(pull.body, description)
     const needsUpdate =
       pull.state === 'closed' ||
       (pull.base?.ref ?? base) !== base ||
@@ -270,7 +293,7 @@ export async function syncOrcaRelease({
         body: desiredBody
       })
     }
-    return `${changed || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${release.tag_name}.`
+    return `${changed || workflowChanges || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${keepNewerRelease ? describedTag : release.tag_name}.`
   }
   const created = await github.rest.pulls.create({
     ...repo,

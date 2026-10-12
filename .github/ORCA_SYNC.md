@@ -37,7 +37,9 @@ Git hooks, and does not install dependencies or execute upstream code.
 - Set repository variable **ORCA_SYNC_PAUSED=true** to pause scheduled updates.
   Remove it or set it to `false` to resume. Manual runs remain available.
 - Use **Run workflow** with an optional stable release tag to bypass the
-  72-hour wait. An older version already in Phorca or the update branch is a no-op.
+  72-hour wait. A release older than the PR's selected version is not merged,
+  even from a divergent upstream branch. Workflow files can still be refreshed.
+  A version already in Phorca or the update branch is a no-op.
   Always select Phorca's default branch in **Use workflow from**; other branches
   and tags are rejected. The release is chosen with the separate `tag` input.
 - Closing an unmerged sync PR pauses updates until a manual run reopens it.
