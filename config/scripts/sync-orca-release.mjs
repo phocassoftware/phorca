@@ -6,6 +6,10 @@ const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const BODY_START = '<!-- orca-sync:start -->'
 const BODY_END = '<!-- orca-sync:end -->'
 
+function compareVersions(left, right) {
+  return left.map((part, index) => part - right[index]).find((part) => part !== 0) ?? 0
+}
+
 function stableVersion(release) {
   const match = STABLE_TAG.exec(release.tag_name)
   if (!match || release.draft || release.prerelease || !release.published_at) {
@@ -36,9 +40,7 @@ export function selectOrcaRelease(releases, { now = Date.now(), overrideTag = ''
     if (!version || Date.parse(release.published_at) > now - MINIMUM_AGE_MS) {
       continue
     }
-    const difference = selectedVersion
-      ? version.map((part, index) => part - selectedVersion[index]).find((part) => part !== 0)
-      : 1
+    const difference = selectedVersion ? compareVersions(version, selectedVersion) : 1
     if (difference > 0) {
       selected = release
       selectedVersion = version
@@ -245,16 +247,30 @@ export async function syncOrcaRelease({
   const description = releaseDescription(release, overrideTag)
   const title = `AI-101 Update Phorca to Orca ${release.tag_name}`
   if (pull && !pull.merged_at) {
-    if (changed || pull.state === 'closed') {
+    const generatedBody = pull.body?.split(BODY_START)[1]?.split(BODY_END)[0] ?? ''
+    const describedTag = /\[Orca (v\d+\.\d+\.\d+)\]/.exec(generatedBody)?.[1] ?? ''
+    const describedVersion = STABLE_TAG.exec(describedTag)?.slice(1).map(Number)
+    // A manually selected younger release must not be relabelled as an older automatic candidate.
+    const refreshRelease =
+      changed || !describedVersion || compareVersions(stableVersion(release), describedVersion) >= 0
+    const desiredTitle = refreshRelease ? title : pull.title
+    const desiredBody = refreshRelease ? updatedDescription(pull.body, description) : pull.body
+    const needsUpdate =
+      pull.state === 'closed' ||
+      (pull.base?.ref ?? base) !== base ||
+      pull.title !== desiredTitle ||
+      pull.body !== desiredBody
+    if (needsUpdate) {
       await github.rest.pulls.update({
         ...repo,
         pull_number: pull.number,
         state: 'open',
         base,
-        ...(changed ? { title, body: updatedDescription(pull.body, description) } : {})
+        title: desiredTitle,
+        body: desiredBody
       })
     }
-    return `${changed ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${release.tag_name}.`
+    return `${changed || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${release.tag_name}.`
   }
   const created = await github.rest.pulls.create({
     ...repo,

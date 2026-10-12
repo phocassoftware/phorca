@@ -22,6 +22,7 @@ jobs:
   sync:
     if: >-
       github.repository == 'phocassoftware/phorca' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
       (github.event_name == 'workflow_dispatch' || vars.ORCA_SYNC_PAUSED != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -45,18 +46,7 @@ jobs:
           script: |
             const { join } = require('node:path')
             const { pathToFileURL } = require('node:url')
-            const { syncOrcaRelease } = await import(pathToFileURL(join(
-              process.env.GITHUB_WORKSPACE, 'config/scripts/sync-orca-release.mjs'
+            const { runOrcaReleaseAction } = await import(pathToFileURL(join(
+              process.env.GITHUB_WORKSPACE, 'config/scripts/sync-orca-release-action.mjs'
             )).href)
-            const git = (args) => exec.getExecOutput('git', [
-              '-c', `core.hooksPath=${join(process.env.RUNNER_TEMP, 'orca-sync-disabled-hooks')}`,
-              '-c', 'commit.gpgSign=false', ...args
-            ], { ignoreReturnCode: true, silent: true })
-            const result = await syncOrcaRelease({
-              github, git, repo: context.repo,
-              base: context.payload.repository.default_branch,
-              manual: context.eventName === 'workflow_dispatch',
-              overrideTag: process.env.OVERRIDE_TAG
-            })
-            core.info(result)
-            await core.summary.addRaw(result).write()
+            await runOrcaReleaseAction({ github, context, core, exec })

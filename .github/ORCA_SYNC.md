@@ -19,7 +19,7 @@ The workflow does not run AI or treat Codex and Claude differently.
    **Allow GitHub Actions to create and approve pull requests**. Organization
    policy must allow this setting. The workflow itself grants `contents: write`
    and `pull-requests: write` to GitHub's automatically provided `GITHUB_TOKEN`.
-3. Enable the workflow in Actions and run it once manually.
+3. Enable the workflow in Actions and run it once manually from the default branch.
 
 No custom token or repository secret is needed. When the PR shows
 **Approve workflows to run**, approve its checks before merging. See
@@ -38,6 +38,8 @@ Git hooks, and does not install dependencies or execute upstream code.
   Remove it or set it to `false` to resume. Manual runs remain available.
 - Use **Run workflow** with an optional stable release tag to bypass the
   72-hour wait. An older version already in Phorca or the update branch is a no-op.
+  Always select Phorca's default branch in **Use workflow from**; other branches
+  and tags are rejected. The release is chosen with the separate `tag` input.
 - Closing an unmerged sync PR pauses updates until a manual run reopens it.
 - Resolve conflicts and push fixes on the PR branch. Those commits survive
   subsequent updates. If a later update conflicts, the workflow reports failure
@@ -51,3 +53,6 @@ The first PR can show merge conflicts with Phorca. Review them and the usual
 PR checks before merging, including Phorca's security controls and both agent
 integrations. Updates use force-with-lease so a concurrent human push cannot be
 overwritten. No automatic merge is performed.
+If pushing an update succeeds but updating its PR details fails, rerun the
+failed workflow with the same inputs. It repairs the title and release
+description without another push.

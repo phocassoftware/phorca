@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runOrcaReleaseAction } from './sync-orca-release-action.mjs'
 import { ORCA_SYNC_BRANCH, selectOrcaRelease, syncOrcaRelease } from './sync-orca-release.mjs'
 
 const NOW = Date.parse('2026-10-12T00:00:00Z')
@@ -72,6 +73,7 @@ describe('Orca release selection', () => {
 
 const roots = []
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -316,6 +318,43 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.pulls[0].body).toContain('bypassing the 72-hour wait')
   })
 
+  it('repairs stale release details after a successful push and failed PR update without another push', async () => {
+    const f = fixture()
+    await f.sync()
+    f.pulls[0].body += '\nReviewer: keep this note.\n'
+    f.addRelease('v1.4.224', 'next')
+    f.setReleases([release('v1.4.224')])
+    f.github.rest.pulls.update.mockRejectedValueOnce(new Error('API unavailable'))
+    await expect(f.sync()).rejects.toThrow('API unavailable')
+    expect(f.pulls[0].title).toContain('v1.4.223')
+    const pushedHead = f.remoteHead()
+    const pushCount = f.git.mock.calls.filter(([args]) => args[0] === 'push').length
+    expect(await f.sync()).toContain('Updated')
+    expect(f.pulls[0].title).toContain('v1.4.224')
+    expect(f.pulls[0].body).toContain('[Orca v1.4.224]')
+    expect(f.pulls[0].body).toContain('Reviewer: keep this note.')
+    expect(f.remoteHead()).toBe(pushedHead)
+    expect(f.git.mock.calls.filter(([args]) => args[0] === 'push')).toHaveLength(pushCount)
+    await f.sync()
+    expect(f.github.rest.pulls.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a manually selected younger release when a later run selects an older candidate', async () => {
+    const f = fixture()
+    await f.sync()
+    f.addRelease('v1.4.224', 'younger')
+    f.setReleases([release('v1.4.223'), release('v1.4.224', 1)])
+    await f.sync({ manual: true, overrideTag: 'v1.4.224' })
+    const body = f.pulls[0].body
+    const head = f.remoteHead()
+    await f.sync()
+    await f.sync({ manual: true, overrideTag: 'v1.4.223' })
+    expect(f.pulls[0].title).toContain('v1.4.224')
+    expect(f.pulls[0].body).toBe(body)
+    expect(f.remoteHead()).toBe(head)
+    expect(f.github.rest.pulls.update).toHaveBeenCalledOnce()
+  })
+
   it('refuses to overwrite a human push that races the sync push', async () => {
     const f = fixture()
     await f.sync()
@@ -370,11 +409,63 @@ describe('Orca sync with real Git repositories', () => {
   })
 })
 
+describe('Orca release action', () => {
+  it.each(['refs/heads/feature', 'refs/tags/v1.4.224'])(
+    'rejects manual runs from %s before Git or API calls',
+    async (ref) => {
+      const exec = { getExecOutput: vi.fn() }
+      const github = { paginate: vi.fn() }
+      const context = { ref, payload: { repository: { default_branch: 'main' } } }
+      await expect(runOrcaReleaseAction({ github, exec, context, core: {} })).rejects.toThrow(
+        'must run from the default branch'
+      )
+      expect(exec.getExecOutput).not.toHaveBeenCalled()
+      expect(github.paginate).not.toHaveBeenCalled()
+    }
+  )
+
+  it('runs a manual release override from the default branch and reports the result', async () => {
+    const f = fixture()
+    f.setReleases([release('v1.4.223', 1)])
+    vi.stubEnv('RUNNER_TEMP', f.checkout)
+    vi.stubEnv('OVERRIDE_TAG', 'v1.4.223')
+    const exec = { getExecOutput: vi.fn(async (_program, args) => f.git(args.slice(4))) }
+    const summary = { addRaw: vi.fn().mockReturnThis(), write: vi.fn() }
+    const core = { info: vi.fn(), summary }
+    const context = {
+      ref: 'refs/heads/main',
+      eventName: 'workflow_dispatch',
+      repo: { owner: 'phocassoftware', repo: 'phorca' },
+      payload: { repository: { default_branch: 'main' } }
+    }
+    await runOrcaReleaseAction({ github: f.github, exec, context, core })
+    expect(f.github.rest.repos.getReleaseByTag).toHaveBeenCalledWith({
+      owner: 'stablyai',
+      repo: 'orca',
+      tag: 'v1.4.223'
+    })
+    expect(exec.getExecOutput).toHaveBeenCalledWith(
+      'git',
+      expect.arrayContaining([
+        `core.hooksPath=${join(f.checkout, 'orca-sync-disabled-hooks')}`,
+        'commit.gpgSign=false'
+      ]),
+      { ignoreReturnCode: true, silent: true }
+    )
+    expect(core.info).toHaveBeenCalledWith(expect.stringContaining('Created'))
+    expect(summary.addRaw).toHaveBeenCalledWith(expect.stringContaining('Created'))
+    expect(summary.write).toHaveBeenCalledOnce()
+  })
+})
+
 it('runs only in Phorca, serializes scheduled/manual runs and executes trusted default-branch code', () => {
   const workflow = parse(readFileSync('.github/workflows/sync-orca-release.yml', 'utf8'))
   expect(workflow.on.schedule).toEqual([{ cron: '23 0 * * *' }])
   expect(workflow.concurrency['cancel-in-progress']).toBe(false)
   expect(workflow.jobs.sync.if).toContain("github.repository == 'phocassoftware/phorca'")
+  expect(workflow.jobs.sync.if).toContain(
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+  )
   expect(workflow.jobs.sync.if).toContain("vars.ORCA_SYNC_PAUSED != 'true'")
   const checkout = workflow.jobs.sync.steps.find((step) => step.uses === 'actions/checkout@v6')
   expect(checkout.with.ref).toBe('${{ github.event.repository.default_branch }}')
@@ -383,6 +474,7 @@ it('runs only in Phorca, serializes scheduled/manual runs and executes trusted d
   expect(script.with['github-token']).toBe('${{ secrets.GITHUB_TOKEN }}')
   expect(workflow.permissions).toEqual({ contents: 'write', 'pull-requests': 'write' })
   expect(JSON.stringify(workflow)).not.toContain('ORCA_SYNC_TOKEN')
-  expect(script.with.script).toContain('core.hooksPath=')
+  expect(script.with.script).toContain('sync-orca-release-action.mjs')
+  expect(script.with.script).not.toContain('getExecOutput')
   expect(script.with.script).not.toContain('${{ inputs.tag }}')
 })
