@@ -214,18 +214,19 @@ export async function syncOrcaRelease({
   ])
   const releaseSha = (await runGit(['rev-parse', `${RELEASE_REF}^{commit}`])).stdout.trim()
   const baseRef = `refs/remotes/origin/${base}`
-  if (await ancestor(releaseSha, baseRef)) {
-    return `Phorca already includes Orca ${release.tag_name}.`
-  }
+  const alreadyInBase = await ancestor(releaseSha, baseRef)
 
   const remoteRef = `refs/heads/${ORCA_SYNC_BRANCH}`
   const remote = await runGit(['ls-remote', '--exit-code', '--heads', 'origin', remoteRef], [0, 2])
   const expectedHead = remote.stdout.trim().split(/\s+/)[0] ?? ''
   let preserveBranch = false
   if (expectedHead) {
-    await runGit(['fetch', '--no-tags', 'origin', `${remoteRef}:refs/remotes/orca-sync/previous`])
+    await runGit(['fetch', '--no-tags', 'origin', `+${remoteRef}:refs/remotes/orca-sync/previous`])
     // Only retire a branch whose entire history is already safely in Phorca.
     preserveBranch = !(await ancestor(expectedHead, baseRef))
+  }
+  if (alreadyInBase && !preserveBranch) {
+    return `Phorca already includes Orca ${release.tag_name}.`
   }
   if (keepNewerRelease && !preserveBranch) {
     throw new Error(

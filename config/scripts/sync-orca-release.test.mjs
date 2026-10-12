@@ -478,28 +478,45 @@ describe('Orca sync with real Git repositories', () => {
     expect(readFileSync(join(f.checkout, 'desktop.txt'), 'utf8')).toBe('next\n')
   })
 
-  it('refreshes Phorca workflows on the open PR after a manual main-branch edit without a new release', async () => {
-    const f = fixture()
-    await f.sync()
-    const previous = f.remoteHead()
-    f.local(['checkout', 'main'])
-    writeFileSync(
-      join(f.checkout, '.github', 'workflows', 'ci.yml'),
-      'Manually reviewed Phorca CI\n'
-    )
-    f.local(['add', '.'])
-    f.local(['commit', '-m', 'Review CI separately'])
-    f.local(['push', 'origin', 'main'])
-    await f.sync()
-    expect(f.remoteHead()).not.toBe(previous)
-    expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
-      f.local(['rev-parse', 'origin/main:.github/workflows'])
-    )
-    expect(f.github.rest.pulls.create).toHaveBeenCalledOnce()
-    const refreshed = f.remoteHead()
-    await f.sync()
-    expect(f.remoteHead()).toBe(refreshed)
-  })
+  it.each([false, true])(
+    'refreshes Phorca workflows without a new eligible release (previous release merged: %s)',
+    async (merged) => {
+      const f = fixture()
+      await f.sync()
+      if (merged) {
+        f.local(['checkout', 'main'])
+        f.local(['merge', '--no-edit', ORCA_SYNC_BRANCH])
+        f.local(['push', 'origin', 'main'])
+        f.pulls[0].state = 'closed'
+        f.pulls[0].merged_at = '2026-10-12T00:00:00Z'
+        f.addRelease('v1.4.224', 'younger')
+        f.setReleases([release('v1.4.223'), release('v1.4.224', 1)])
+        await f.sync({ manual: true, overrideTag: 'v1.4.224' })
+      }
+      const title = f.pulls[0].title
+      const body = f.pulls[0].body
+      const previous = f.remoteHead()
+      f.local(['checkout', 'main'])
+      writeFileSync(
+        join(f.checkout, '.github', 'workflows', 'ci.yml'),
+        'Manually reviewed Phorca CI\n'
+      )
+      f.local(['add', '.'])
+      f.local(['commit', '-m', 'Review CI separately'])
+      f.local(['push', 'origin', 'main'])
+      await f.sync()
+      expect(f.remoteHead()).not.toBe(previous)
+      expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
+        f.local(['rev-parse', 'origin/main:.github/workflows'])
+      )
+      expect(f.github.rest.pulls.create).toHaveBeenCalledTimes(merged ? 2 : 1)
+      expect(f.pulls[0].title).toBe(title)
+      expect(f.pulls[0].body).toBe(body)
+      const refreshed = f.remoteHead()
+      await f.sync()
+      expect(f.remoteHead()).toBe(refreshed)
+    }
+  )
 })
 
 describe('Orca release action', () => {
