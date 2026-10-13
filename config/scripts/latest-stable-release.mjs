@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from 'node:url'
+import { compareDesktopVersions } from './create-draft-release.mjs'
 
 const API_VERSION = '2022-11-28'
 const DESKTOP_STABLE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
@@ -20,10 +21,6 @@ export function parseDesktopStableTag(tag) {
   return [version.major, version.minor, version.patch].every(Number.isSafeInteger) ? version : null
 }
 
-export function compareDesktopStableTags(left, right) {
-  return left.major - right.major || left.minor - right.minor || left.patch - right.patch
-}
-
 export function latestStableDesktopRelease(releases, { isEligible = () => true } = {}) {
   let selected = null
   let selectedVersion = null
@@ -32,7 +29,7 @@ export function latestStableDesktopRelease(releases, { isEligible = () => true }
     if (!version || release.draft === true || !isEligible(release)) {
       continue
     }
-    if (!selectedVersion || compareDesktopStableTags(version, selectedVersion) > 0) {
+    if (!selectedVersion || compareDesktopVersions(version, selectedVersion) > 0) {
       selected = release
       selectedVersion = version
     }

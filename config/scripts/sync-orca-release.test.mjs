@@ -198,6 +198,11 @@ function fixture({ keepWorkflows = true } = {}) {
     })
   const local = (args) => checked(checkout, args)
   const remoteHead = () => checked(origin, ['rev-parse', `refs/heads/${ORCA_SYNC_BRANCH}`])
+  const replaceRemote = (tree, parent, message) => {
+    const commit = local(['commit-tree', tree, '-p', parent, '-m', message])
+    local(['push', '-f', 'origin', `${commit}:refs/heads/${ORCA_SYNC_BRANCH}`])
+    return commit
+  }
   return {
     checkout,
     upstream,
@@ -207,6 +212,7 @@ function fixture({ keepWorkflows = true } = {}) {
     sync,
     local,
     remoteHead,
+    replaceRemote,
     addRelease,
     upstreamGit: (args) => checked(upstream, args),
     setReleases: (items) => {
@@ -465,6 +471,37 @@ describe('Orca sync with real Git repositories', () => {
     await expect(f.sync({ git })).rejects.toThrow('git push failed')
     expect(f.remoteHead()).toBe(human)
     expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
+  })
+
+  it('continues from a non-fast-forward replacement of the update branch', async () => {
+    const f = fixture()
+    await f.sync()
+    const previous = f.remoteHead()
+    await f.sync()
+    expect(f.local(['rev-parse', 'refs/remotes/orca-sync/previous'])).toBe(previous)
+    const rewritten = f.replaceRemote(`${previous}^{tree}`, `${previous}^`, 'Rewritten branch')
+    f.addRelease('v1.4.224', 'next')
+    f.setReleases([release('v1.4.224')])
+    expect(await f.sync()).toContain('the branch includes Orca v1.4.224')
+    f.local(['merge-base', '--is-ancestor', rewritten, f.remoteHead()])
+    expect(f.pulls).toHaveLength(1)
+    expect(f.pulls[0].title).toContain('v1.4.224')
+  })
+
+  it('requires repair when the update branch no longer contains the newer described release', async () => {
+    const f = fixture()
+    f.addRelease('v1.4.224', 'younger')
+    f.setReleases([release('v1.4.223'), release('v1.4.224', 1)])
+    await f.sync({ manual: true, overrideTag: 'v1.4.224' })
+    const body = f.pulls[0].body
+    const replaced = f.replaceRemote('origin/main^{tree}', 'origin/main', 'Branch without Orca')
+    await expect(f.sync()).rejects.toThrow("no longer contains the PR's Orca v1.4.224")
+    expect(f.remoteHead()).toBe(replaced)
+    expect(f.pulls[0].body).toBe(body)
+    expect(await f.sync({ manual: true, overrideTag: 'v1.4.224' })).toContain(
+      'the branch includes Orca v1.4.224'
+    )
+    f.local(['merge-base', '--is-ancestor', 'refs/remotes/orca-sync/release', f.remoteHead()])
   })
 
   it('excludes upstream workflows even when Phorca has removed the whole workflow directory', async () => {

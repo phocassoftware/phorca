@@ -1,13 +1,12 @@
 import { mergeMarkedBlock } from '../../.github/scripts/pr-test-loc-table.mjs'
-import {
-  compareDesktopStableTags,
-  latestStableDesktopRelease,
-  parseDesktopStableTag
-} from './latest-stable-release.mjs'
+import { compareDesktopVersions } from './create-draft-release.mjs'
+import { latestStableDesktopRelease, parseDesktopStableTag } from './latest-stable-release.mjs'
 
 export const ORCA_SYNC_BRANCH = 'codex/AI-101-orca-release-sync'
 const UPSTREAM = { owner: 'stablyai', repo: 'orca' }
+const UPSTREAM_URL = 'https://github.com/stablyai/orca.git'
 const RELEASE_REF = 'refs/remotes/orca-sync/release'
+const DESCRIBED_REF = 'refs/remotes/orca-sync/described'
 const MINIMUM_AGE_MS = 72 * 60 * 60 * 1000
 const BODY_START = '<!-- orca-sync:start -->'
 const BODY_END = '<!-- orca-sync:end -->'
@@ -196,7 +195,7 @@ export async function syncOrcaRelease({
   const keepNewerRelease =
     !pull?.merged_at &&
     describedVersion &&
-    compareDesktopStableTags(parseDesktopStableTag(release.tag_name), describedVersion) < 0
+    compareDesktopVersions(parseDesktopStableTag(release.tag_name), describedVersion) < 0
   if (keepNewerRelease && generatedBodyParts.length < 2) {
     throw new Error(
       `Restore the PR's release markers by running manually with tag ${describedTag}.`
@@ -209,7 +208,7 @@ export async function syncOrcaRelease({
   await runGit([
     'fetch',
     '--no-tags',
-    'https://github.com/stablyai/orca.git',
+    UPSTREAM_URL,
     `+refs/tags/${release.tag_name}:${RELEASE_REF}`
   ])
   const releaseSha = (await runGit(['rev-parse', `${RELEASE_REF}^{commit}`])).stdout.trim()
@@ -232,6 +231,20 @@ export async function syncOrcaRelease({
     throw new Error(
       `Restore the update branch for the PR's newer Orca ${describedTag} before syncing.`
     )
+  }
+  if (keepNewerRelease) {
+    // Why: the PR metadata alone cannot prove a force-pushed branch still carries that release.
+    await runGit([
+      'fetch',
+      '--no-tags',
+      UPSTREAM_URL,
+      `+refs/tags/${describedTag}:${DESCRIBED_REF}`
+    ])
+    if (!(await ancestor(`${DESCRIBED_REF}^{commit}`, expectedHead))) {
+      throw new Error(
+        `The update branch no longer contains the PR's Orca ${describedTag}. Run manually with tag ${describedTag} to restore it.`
+      )
+    }
   }
 
   await runGit(['config', 'user.name', 'github-actions[bot]'])
