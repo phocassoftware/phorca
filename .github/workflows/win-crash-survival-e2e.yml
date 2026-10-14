@@ -35,7 +35,6 @@ jobs:
     timeout-minutes: 50
     env:
       EXPECT: ${{ inputs.expect || 'survival' }}
-      ORCA_BACKGROUND_LAUNCH: '1'
 
     steps:
       - name: Checkout
