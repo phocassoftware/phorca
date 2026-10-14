@@ -44,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Historical skill snapshots need tags, but only their blobs are read.
+          # Historical skill snapshots need history, but only their blobs are read.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false

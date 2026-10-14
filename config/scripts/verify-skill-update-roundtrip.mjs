@@ -67,27 +67,26 @@ function historicalRelease(name) {
     }
     const snapshot = registry.skills[name]?.find((entry) => entry.releaseRevision === revision)
     if (snapshot) {
-      return { tag: `v${release.appVersion}`, snapshot }
+      return { tree: snapshot.gitTreeSha, snapshot }
     }
   }
   throw new Error(`No historical released snapshot is available for ${name}`)
 }
 
-async function materializePackage(name, tag, destination) {
-  const prefix = `skills/${name}/`
-  const entries = execFileSync('git', ['ls-tree', '-r', '-z', tag, '--', `skills/${name}`])
+async function materializePackage(name, tree, destination) {
+  const entries = execFileSync('git', ['ls-tree', '-r', '-z', tree])
     .toString('utf8')
     .split('\0')
     .filter(Boolean)
   if (entries.length === 0) {
-    throw new Error(`${tag} does not contain ${name}`)
+    throw new Error(`${tree} does not contain ${name}`)
   }
   for (const entry of entries) {
     const match = /^(\d+) (\w+) ([a-f0-9]+)\t(.+)$/.exec(entry)
     if (!match || match[2] !== 'blob') {
       throw new Error(`Unsupported historical tree entry: ${entry}`)
     }
-    const relativePath = match[4].slice(prefix.length)
+    const relativePath = match[4]
     const destinationPath = path.join(destination, ...relativePath.split('/'))
     await mkdir(path.dirname(destinationPath), { recursive: true })
     await writeFile(destinationPath, execFileSync('git', ['cat-file', 'blob', match[3]]))
@@ -97,9 +96,9 @@ async function materializePackage(name, tag, destination) {
   }
 }
 
-async function seedPlacement(name, tag) {
+async function seedPlacement(name, tree) {
   const canonical = path.join(home, '.agents', 'skills', name)
-  await materializePackage(name, tag, canonical)
+  await materializePackage(name, tree, canonical)
   const providerRoot = path.join(home, '.claude', 'skills')
   const provider = path.join(providerRoot, name)
   await mkdir(providerRoot, { recursive: true })
@@ -166,8 +165,8 @@ try {
   await installFakeAgentCommands()
   await mkdir(path.join(home, '.codex'), { recursive: true })
   await mkdir(path.join(home, '.claude'), { recursive: true })
-  await seedPlacement(targetName, targetHistorical.tag)
-  await seedPlacement(controlName, controlHistorical.tag)
+  await seedPlacement(targetName, targetHistorical.tree)
+  await seedPlacement(controlName, controlHistorical.tree)
   const targetProvider = path.join(home, '.claude', 'skills', targetName)
   const controlCanonical = path.join(home, '.agents', 'skills', controlName)
   const controlProvider = path.join(home, '.claude', 'skills', controlName)
