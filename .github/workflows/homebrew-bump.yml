@@ -132,8 +132,7 @@ jobs:
           print(src)
           PY
 
-      # Why: reuse the existing buf0-bot GitHub App (also used by
-      # track-community-prs.yaml) instead of minting a new PAT. The app is
+      # Why: reuse the existing buf0-bot GitHub App instead of minting a new PAT. The app is
       # installed org-wide, so it has access to stablyai/homebrew-orca
       # automatically. GITHUB_TOKEN cannot push cross-repo; a short-lived
       # installation token can.

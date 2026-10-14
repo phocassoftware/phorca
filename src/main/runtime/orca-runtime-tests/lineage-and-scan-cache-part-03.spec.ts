@@ -330,7 +330,8 @@ describe('OrcaRuntimeService', () => {
 
   it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
     vi.mocked(listWorktrees).mockClear()
-    vi.useFakeTimers({ now: 0 })
+    // Expiry depends on Date.now; advancing runtime timers can trigger unrelated scans.
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0)
     try {
       const repos = [
         { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
@@ -344,16 +345,16 @@ describe('OrcaRuntimeService', () => {
       vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
 
       await runtime.listDetectedManagedWorktrees('id:repo-a')
-      await vi.advanceTimersByTimeAsync(10_000)
+      now.mockReturnValue(10_000)
       await runtime.listDetectedManagedWorktrees('id:repo-b')
-      await vi.advanceTimersByTimeAsync(20_000)
+      now.mockReturnValue(30_000)
       await runtime.listDetectedManagedWorktrees('id:repo-a')
       await runtime.listDetectedManagedWorktrees('id:repo-b')
 
       expect(listWorktrees).toHaveBeenCalledTimes(3)
       expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
     } finally {
-      vi.useRealTimers()
+      now.mockRestore()
     }
   })
 
