@@ -95,7 +95,10 @@ describe('root directory guard', () => {
 
   it('rejects a new root-level file with the landing-page message', () => {
     const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['new-root.md', 'too prominent\n']])
+    const head = commitFiles(fixture.root, [
+      ['MERGE-CONFLICTS.md', 'merge policy\n'],
+      ['new-root.md', 'too prominent\n']
+    ])
 
     const result = runGuard({ ...fixture, head })
     const output = `${result.stdout}\n${result.stderr}`
@@ -103,16 +106,20 @@ describe('root directory guard', () => {
     expect(result.status).toBe(1)
     expect(output).toContain('bloat the GitHub landing page')
     expect(output).toContain('new-root.md')
+    expect(output).not.toContain('MERGE-CONFLICTS.md')
   })
 
-  it('allows the reviewed cloud workspace directory', () => {
-    const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['cloud/package.json', '{}\n']])
+  it.each(['cloud/package.json', 'MERGE-CONFLICTS.md'])(
+    'allows the reviewed root addition %s',
+    (relativePath) => {
+      const fixture = makeFixture()
+      const head = commitFiles(fixture.root, [[relativePath, '{}\n']])
 
-    const result = runGuard({ ...fixture, head })
+      const result = runGuard({ ...fixture, head })
 
-    expect(result.status).toBe(0)
-  })
+      expect(result.status).toBe(0)
+    }
+  )
 
   it('rejects a new top-level directory', () => {
     const fixture = makeFixture()
