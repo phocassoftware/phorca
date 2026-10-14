@@ -28,8 +28,8 @@ import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-pr
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
  * survives Windows auto-updates: the NSIS installer deletes the old install and force-kills every process
  * imaged under it, which would otherwise kill the daemon and its live terminals. The relocated exe is a
- * run-as-node Orca.exe copy (not node.exe) so there's no console flash and asar still resolves. Fail-open:
- * any failure returns null and the caller forks the install-dir host (pre-relocation behavior).
+ * run-as-node copy of the packaged app executable (not node.exe) so there's no console flash and asar
+ * still resolves. Fail-open: any failure returns null and the caller forks the install-dir host.
  *
  * What escapes the updater is the PATH, not the file name: electron-builder's kill sweep selects
  * processes whose image path sits under $INSTDIR. See docs/reference/windows-daemon-host-relocation.md
@@ -46,8 +46,10 @@ export type RelocatedDaemonHost = {
 const HOST_SUBDIR = 'daemon-host'
 const MARKER_NAME = '.materialized.json'
 
-// LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
-const LOCAL_HOST_ROOT_NAME = 'Orca'
+// LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. The executable
+// basename scopes rebranded builds away from upstream Orca; electron-builder's PRODUCT_FILENAME
+// supplies the same sanitized executable basename to NSIS.
+const daemonHostRootName = (execPath: string): string => winPath.parse(execPath).name
 
 type MaterializeMarker = {
   version: string
@@ -135,11 +137,12 @@ function missingProcessTreeFiles(packageDir: string): boolean {
 }
 
 function hostRootDir(): string {
-  // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
+  // LOCALAPPDATA is shared across products, so scope it by the packaged executable identity.
+  // userData is already product-specific and remains the fallback when LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
   const base =
     typeof localAppData === 'string' && localAppData.length > 0
-      ? join(localAppData, LOCAL_HOST_ROOT_NAME)
+      ? join(localAppData, daemonHostRootName(process.execPath))
       : getAppEnvironment().getPath('userData')
   return join(base, HOST_SUBDIR)
 }

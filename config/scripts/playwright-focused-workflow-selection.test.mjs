@@ -64,6 +64,7 @@ it('focused IME and golden commands discover only their requested files with the
   const config = join(directory, 'playwright.config.cjs')
   const testPackage = JSON.stringify(require.resolve('@stablyai/playwright-test'))
   try {
+    writeFileSync(join(directory, 'package.json'), JSON.stringify({ type: 'commonjs' }))
     mkdirSync(join(directory, 'tests/e2e'), { recursive: true })
     writeFileSync(config, "module.exports = { testDir: '.', testMatch: '**/*.spec.ts' }")
     const requestedFiles = commands.flatMap((args) =>
@@ -91,7 +92,7 @@ it('focused IME and golden commands discover only their requested files with the
         env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
         timeoutMs: 20_000
       })
-      expect(result.code, result.stderr).toBe(0)
+      expect(result.code, result.stderr || result.stdout).toBe(0)
       const report = JSON.parse(result.stdout)
       const expected = args.filter((arg) => arg.endsWith('.spec.ts')).sort()
       expect(
