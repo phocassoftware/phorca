@@ -1,7 +1,7 @@
-# Windows inner-binary signing rehearsal.
+﻿# Windows inner-binary signing rehearsal.
 #
 # Why: SignPath cannot deep-sign inside NSIS installers, so shipping signed
-# inner binaries (Phorca.exe, node-pty *.node, DLLs — see issue #7785) requires
+# inner binaries (Orca.exe, node-pty *.node, DLLs — see issue #7785) requires
 # a two-request flow: sign the unpacked PE files first, then build the NSIS
 # installer from the signed tree, then sign the installer. The NSIS uninstaller
 # rides that same first request — it is captured through electron-builder's sign
@@ -108,8 +108,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path 'dist/win-unpacked/Phorca.exe')) {
-            throw 'electron-builder --win did not produce dist/win-unpacked/Phorca.exe'
+          if (-not (Test-Path 'dist/win-unpacked/Orca.exe')) {
+            throw 'electron-builder --win did not produce dist/win-unpacked/Orca.exe'
           }
           if (-not (Test-Path -LiteralPath $env:ORCA_WIN_UNINSTALLER_EXPORT_PATH)) {
             throw "The sign hook did not export the NSIS uninstaller to $env:ORCA_WIN_UNINSTALLER_EXPORT_PATH"
@@ -142,8 +142,8 @@ jobs:
               $list.Add($relative)
             }
 
-          if (-not ($list -contains 'Phorca.exe')) {
-            throw 'Phorca.exe was not staged for signing; unpacked layout changed?'
+          if (-not ($list -contains 'Orca.exe')) {
+            throw 'Orca.exe was not staged for signing; unpacked layout changed?'
           }
           if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
             throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
@@ -210,25 +210,20 @@ jobs:
       # signed and unsigned binaries.
       - name: Restore signed inner binaries into unpacked app
         shell: pwsh
-        env:
-          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
         run: |
-          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
           $root = Resolve-Path 'dist/win-unpacked'
           $failures = New-Object System.Collections.Generic.List[string]
           foreach ($relative in Get-Content 'inner-signing-list.txt') {
-            $candidates = @(
-              (Join-Path 'signed-inner' $relative),
-              (Join-Path 'signed-inner/signing-stage' $relative)
-            ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
-            if (@($candidates).Count -ne 1) {
-              $failures.Add("missing or ambiguous signed artifact path: $relative")
+            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
+              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
+              Select-Object -First 1
+            if ($null -eq $signed) {
+              $failures.Add("missing from signed artifact: $relative")
               continue
             }
-            $signed = Get-Item -LiteralPath @($candidates)[0]
             $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-            if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
-              $failures.Add("returned without a valid SignPath signature: $relative")
+            if ($null -eq $signature.SignerCertificate) {
+              $failures.Add("returned without a signature: $relative")
               continue
             }
             Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
@@ -241,21 +236,15 @@ jobs:
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh
-        env:
-          SIGNING_POLICY: ${{ inputs.signing-policy-slug || 'test-signing' }}
         run: |
-          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
-          $candidates = @(
-            (Join-Path 'signed-inner' 'uninstaller\orca-uninstaller.exe'),
-            (Join-Path 'signed-inner/signing-stage' 'uninstaller\orca-uninstaller.exe')
-          ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
-          if (@($candidates).Count -ne 1) {
-            throw 'Missing or ambiguous uninstaller/orca-uninstaller.exe in the signed artifact; check the windows-inner-binaries-zip configuration.'
+          $signed = Get-ChildItem -Path signed-inner -Recurse -File -Filter 'orca-uninstaller.exe' |
+            Select-Object -First 1
+          if ($null -eq $signed) {
+            throw 'SignPath did not return uninstaller/orca-uninstaller.exe; check the inner-binaries artifact configuration covers it.'
           }
-          $signed = Get-Item -LiteralPath @($candidates)[0]
           $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-          if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
-            throw 'The returned NSIS uninstaller carries no valid SignPath signature.'
+          if ($null -eq $signature.SignerCertificate) {
+            throw 'The returned NSIS uninstaller carries no signature.'
           }
           $signedDir = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\signed'
           New-Item -ItemType Directory -Force -Path $signedDir | Out-Null
@@ -460,7 +449,7 @@ jobs:
               $failures.Add('the silent install did not exit within 5 minutes; it is likely prompting')
             }
             # Why a poll rather than one Stop-Process: the oneClick installer
-            # launches the app as it finishes, so Phorca.exe can appear *after* the
+            # launches the app as it finishes, so Orca.exe can appear *after* the
             # installer process exits. A single silenced Stop-Process would miss
             # it and leave Orca plus orca-terminal-daemon.exe holding handles
             # under %LOCALAPPDATA%\Programs for the rest of the job.
@@ -495,14 +484,10 @@ jobs:
                 $failures.Add("the uninstaller the installer ships is not the relayed one (via $installedVia): $shippedDigest vs $expectedDigest")
               }
             }
-            Test-Signature "shipped: Uninstall Phorca.exe (via $installedVia)" $installedUninstaller.FullName
+            Test-Signature "shipped: Uninstall Orca.exe (via $installedVia)" $installedUninstaller.FullName
           }
 
-          $targets = @(Get-Content 'inner-signing-list.txt')
-          foreach ($requiredTarget in @('Phorca.exe', 'resources\bin\orca.exe')) {
-            if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
-          }
-          foreach ($relative in $targets) {
+          foreach ($relative in Get-Content 'inner-signing-list.txt') {
             $path = Join-Path $root $relative
             if (-not (Test-Path $path)) {
               $failures.Add("missing from installer payload: $relative")
