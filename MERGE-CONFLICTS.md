@@ -33,9 +33,11 @@ See [.github/ORCA_SYNC.md](./.github/ORCA_SYNC.md) for the automated sync proced
    changes and conflict resolutions; do not reset, clean, or restart an active merge.
 2. Identify the refs explicitly:
    - `origin` is `phocassoftware/phorca`; `upstream` is `stablyai/orca`.
-   - Record the fork branch's pre-merge commit as `<PHORCA_BEFORE>`.
    - Fetch Phorca's default branch and record its immutable commit as
      `<PHORCA_WORKFLOW_SOURCE>`; the current default branch is `main`.
+   - Record the fork branch's pre-merge commit as `<PHORCA_BEFORE>`. For a first
+     sync branch created from Orca, use `<PHORCA_WORKFLOW_SOURCE>` instead: the
+     update branch does not yet include Phorca's customizations.
    - Use the exact Orca tag/commit selected for the update as `<ORCA_TARGET>`.
      Scheduled syncs choose a stable desktop release at least 72 hours old.
      Manual overrides can bypass the wait, not the stable-release requirement.
@@ -52,14 +54,31 @@ See [.github/ORCA_SYNC.md](./.github/ORCA_SYNC.md) for the automated sync proced
    newer upstream tip also includes upstream work not yet merged; do not mistake
    that for fork customization. Fetch only the relevant branch/tag, not every ref.
 
-4. Merge the target into the fork/update branch with a normal merge, preserving
-   ancestry. If no merge is already in progress:
+4. Stay on the existing update branch and preserve its commits. If a merge is
+   already in progress, continue resolving it. Otherwise, choose the merge target
+   according to the branch's ancestry:
 
-   ```text
-   git merge --no-commit --no-ff <ORCA_TARGET>
-   ```
+   - **First sync PR, created from Orca:** the `preserveBranch === false` path in
+     `config/scripts/sync-orca-release.mjs` starts at the selected Orca release
+     and restores Phorca's workflows. It has not incorporated Phorca's source
+     changes. Merge the recorded Phorca default-branch commit into this branch:
 
-   Resolve source conflicts by combining upstream changes with the contracts below.
+     ```text
+     git merge --no-commit --no-ff <PHORCA_WORKFLOW_SOURCE>
+     ```
+
+     This exposes the conflicts with Phorca. Merging `<ORCA_TARGET>` here would
+     report already up to date because the branch already contains that release.
+
+   - **Update branch already based on Phorca:** merge the selected Orca release
+     into the branch:
+
+     ```text
+     git merge --no-commit --no-ff <ORCA_TARGET>
+     ```
+
+   In either case, resolve source conflicts by combining upstream changes with the
+   contracts below, then follow steps 5–7 to restore workflows before committing.
    Use explicit refs, not an assumed meaning of `ours` or `theirs`. Do not keep an
    entire old source file just because it contains one fork change.
 

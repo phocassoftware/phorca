@@ -121,16 +121,19 @@ describe('root directory guard', () => {
     }
   )
 
-  it('rejects a new top-level directory', () => {
-    const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['new-folder/file.txt', 'too prominent\n']])
+  it.each(['new-folder/file.txt', 'MERGE-CONFLICTS.md/file.txt'])(
+    'rejects a new top-level directory %s',
+    (relativePath) => {
+      const fixture = makeFixture()
+      const head = commitFiles(fixture.root, [[relativePath, 'too prominent\n']])
 
-    const result = runGuard({ ...fixture, head })
-    const output = `${result.stdout}\n${result.stderr}`
+      const result = runGuard({ ...fixture, head })
+      const output = `${result.stdout}\n${result.stderr}`
 
-    expect(result.status).toBe(1)
-    expect(output).toContain('new-folder')
-  })
+      expect(result.status).toBe(1)
+      expect(output).toContain(relativePath.split('/')[0])
+    }
+  )
 
   // Why: git escapes odd paths unless it is read NUL-delimited, so dropping -z
   // (or decoding the bytes wrong) reports a mangled name nobody can act on.
