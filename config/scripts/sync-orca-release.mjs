@@ -232,6 +232,29 @@ export async function syncOrcaRelease({
       `Restore the update branch for the PR's newer Orca ${describedTag} before syncing.`
     )
   }
+  if (preserveBranch) {
+    const workflowDiff = await runGit(
+      ['diff', '--quiet', baseRef, expectedHead, '--', '.github/workflows'],
+      [0, 1]
+    )
+    const workflowCommit = await runGit([
+      'log',
+      '-1',
+      '--format=%s',
+      expectedHead,
+      '--',
+      '.github/workflows'
+    ])
+    // Only the sync's own workflow snapshots can be replaced while a PR is under review.
+    if (
+      workflowDiff.exitCode !== 0 &&
+      !/^AI-101 (Keep Phorca workflow files during Orca sync|Merge Orca \S+; keep Phorca workflows)$/.test(
+        workflowCommit.stdout.trim()
+      )
+    ) {
+      return 'Updates paused to preserve reviewed workflow changes on the update branch. Merge the PR before syncing again.'
+    }
+  }
   if (keepNewerRelease) {
     // Why: the PR metadata alone cannot prove a force-pushed branch still carries that release.
     await runGit([

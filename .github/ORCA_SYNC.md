@@ -46,6 +46,8 @@ Git hooks, and does not install dependencies or execute upstream code.
 - Resolve conflicts and push fixes on the PR branch. Those commits survive
   subsequent updates. If a later update conflicts, the workflow reports failure
   and preserves the remote branch. Resolve it manually and retry.
+- Reviewed workflow changes on the pending PR pause further sync updates until
+  that PR is merged, so a scheduled run cannot overwrite its CI fixes.
 - Review and apply workflow edits separately to Phorca's default branch. The
   next sync refreshes the PR's workflow files from that branch, even if no new
   Orca release is eligible. Upstream workflow additions, edits and deletions are
