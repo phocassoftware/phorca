@@ -95,7 +95,10 @@ describe('root directory guard', () => {
 
   it('rejects a new root-level file with the landing-page message', () => {
     const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['new-root.md', 'too prominent\n']])
+    const head = commitFiles(fixture.root, [
+      ['MERGE-CONFLICTS.md', 'merge policy\n'],
+      ['new-root.md', 'too prominent\n']
+    ])
 
     const result = runGuard({ ...fixture, head })
     const output = `${result.stdout}\n${result.stderr}`
@@ -103,16 +106,20 @@ describe('root directory guard', () => {
     expect(result.status).toBe(1)
     expect(output).toContain('bloat the GitHub landing page')
     expect(output).toContain('new-root.md')
+    expect(output).not.toContain('MERGE-CONFLICTS.md')
   })
 
-  it('allows the reviewed cloud workspace directory', () => {
-    const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['cloud/package.json', '{}\n']])
+  it.each(['cloud/package.json', 'MERGE-CONFLICTS.md'])(
+    'allows the reviewed root addition %s',
+    (relativePath) => {
+      const fixture = makeFixture()
+      const head = commitFiles(fixture.root, [[relativePath, '{}\n']])
 
-    const result = runGuard({ ...fixture, head })
+      const result = runGuard({ ...fixture, head })
 
-    expect(result.status).toBe(0)
-  })
+      expect(result.status).toBe(0)
+    }
+  )
 
   it('allows the reviewed repository OpenCode permission config', () => {
     const fixture = makeFixture()
@@ -125,16 +132,19 @@ describe('root directory guard', () => {
     expect(result.status).toBe(0)
   })
 
-  it('rejects a new top-level directory', () => {
-    const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['new-folder/file.txt', 'too prominent\n']])
+  it.each(['new-folder/file.txt', 'MERGE-CONFLICTS.md/file.txt', 'opencode.json/file.txt'])(
+    'rejects a new top-level directory %s',
+    (relativePath) => {
+      const fixture = makeFixture()
+      const head = commitFiles(fixture.root, [[relativePath, 'too prominent\n']])
 
-    const result = runGuard({ ...fixture, head })
-    const output = `${result.stdout}\n${result.stderr}`
+      const result = runGuard({ ...fixture, head })
+      const output = `${result.stdout}\n${result.stderr}`
 
-    expect(result.status).toBe(1)
-    expect(output).toContain('new-folder')
-  })
+      expect(result.status).toBe(1)
+      expect(output).toContain(relativePath.split('/')[0])
+    }
+  )
 
   // Why: git escapes odd paths unless it is read NUL-delimited, so dropping -z
   // (or decoding the bytes wrong) reports a mangled name nobody can act on.
@@ -232,21 +242,18 @@ describe('root directory guard', () => {
 
   it('is wired into the PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.code_paths
+    const guardJob = workflow.jobs.root_directory_guard
     const guardStep = guardJob.steps.find(
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
     expect(guardJob.if).toBeUndefined()
     expect(guardStep.if).toBeUndefined()
-    // Why >= 2 rather than 0: the guard compares the merge commit's first parent against the
-    // merged tree, so it needs both parents present but no history beyond them. Depth 1 would
-    // leave HEAD^1 unreachable and the guard would fail closed on every run.
-    expect(guardJob.steps[0].with['fetch-depth']).toBeGreaterThanOrEqual(2)
+    expect(guardJob.steps[0].with['fetch-depth']).toBe(0)
     expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
-    // The base side must come from the merge ref, not the event payload, or a shallow checkout
-    // cannot resolve it.
-    expect(guardStep.run).toContain('git-pull-request-diff-base.mjs')
-    expect(workflow.jobs.verify.needs).toContain('code_paths')
+    expect(guardStep.env.BASE_SHA).toBe('${{ github.event.pull_request.base.sha }}')
+    expect(guardStep.env.HEAD_SHA).toBe('${{ github.event.pull_request.head.sha }}')
+    expect(guardStep.run).toContain('"$BASE_SHA" "$HEAD_SHA"')
+    expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
   })
 })
