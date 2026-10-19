@@ -132,9 +132,9 @@ paths are a starting map, not a fixed allowlist.
   `src/shared/local-build-compatibility-contract.ts`: keep the same Phorca app ID
   in both representations. Adopt upstream state-schema and daemon-protocol changes
   together with their runtime constants; do not freeze old protocol numbers.
-- Current packaging intentionally still has `productName: 'Orca'` and Windows
+- Current packaging has `productName: 'Phorca'` and Windows
   `executableName: 'Orca'`. `package.json` still names the package/CLI `orca`;
-  macOS uses `Orca.app`, Linux uses `orca-ide`, and technical identifiers such as
+  macOS uses `Phorca.app`, Linux uses `orca-ide`, and technical identifiers such as
   the `orca` URL scheme and `ORCA_*` environment variables remain upstream names.
   Do not infer a required `Phorca.exe` rename from rebrand fixtures.
 - Keep upstream artifact names, links, attribution, signing checks, and release
@@ -157,7 +157,7 @@ incompatible with the fork's local-build contract.
   identity file `resources/app-executable-name.txt`, derived from the packager's
   resolved executable name. Validate that the named packaged executable exists;
   do not guess its name from branding text.
-- `native/windows-cli-launcher/OrcaCliLauncher.cs`: resolve the executable through
+- `native/windows-cli-launcher/src/main.rs`: resolve the executable through
   that identity file, require a safe `.exe` basename and an existing file, and
   fail on missing/invalid metadata rather than falling back to a hardcoded
   `Orca.exe` or `Phorca.exe`. Keep direct execution, argument escaping, inherited
@@ -189,7 +189,7 @@ Companion tests:
 `config/scripts/electron-builder-markdown-associations.test.mjs`,
 `src/main/daemon/daemon-host-relocation.test.ts`, and
 `src/main/orcad/orcad-browser-provider.test.ts`.
-Keep rebranded-executable coverage even though the current package is named Orca.
+Keep rebranded-executable coverage even though the Windows executable is named Orca.
 Read and maintain
 [Windows daemon-host relocation](./docs/reference/windows-daemon-host-relocation.md)
 and [Windows EDR posture](./docs/reference/windows-edr-posture.md) when touching this
@@ -272,10 +272,10 @@ Maintain the operational instructions in `.github/ORCA_SYNC.md`.
   entries and the guard's protections. Do not disable the guard.
   Companion: `config/scripts/check-root-directory-entries.test.mjs`.
 - `src/main/runtime/orca-runtime-tests/lineage-and-scan-cache-part-03.spec.ts`:
-  retain deterministic per-repository scan-expiry coverage. The fork mocks
-  `Date.now()` instead of advancing all runtime timers, avoiding unrelated scans,
-  and restores the spy afterward. Keep the behavior assertions, not necessarily
-  this exact implementation if upstream fixes the same test.
+  retain deterministic per-repository scan-expiry coverage. Upstream now uses
+  `vi.setSystemTime()` without advancing runtime timers and mocks the repository
+  fingerprint so unchanged Git state cannot hide the rescan. Keep its behavior
+  assertions and restore the spy and timers afterward.
 - `AGENTS.md`: retain the entry-point link to this policy when taking upstream
   instruction updates. This file, the sync guide, and the two Windows references
   above account for the five documentation/instruction files in the inventory.

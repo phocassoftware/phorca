@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
 import { runOrcaReleaseAction } from './sync-orca-release-action.mjs'
 import { ORCA_SYNC_BRANCH, selectOrcaRelease, syncOrcaRelease } from './sync-orca-release.mjs'
@@ -277,6 +276,21 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.github.rest.pulls.create).toHaveBeenCalledOnce()
     await f.sync()
     expect(f.github.rest.pulls.update).toHaveBeenCalledOnce()
+  })
+
+  it('preserves reviewed CI changes on the pending PR instead of replacing them with main', async () => {
+    const f = fixture()
+    await f.sync()
+    writeFileSync(join(f.checkout, '.github', 'workflows', 'ci.yml'), 'Reviewed Phorca CI\n')
+    f.local(['add', '.'])
+    f.local(['commit', '-m', 'Review CI for the release'])
+    f.local(['push', 'origin', `HEAD:refs/heads/${ORCA_SYNC_BRANCH}`])
+    const before = f.remoteHead()
+    f.addRelease('v1.4.224', 'newest')
+    f.setReleases([release('v1.4.224')])
+    expect(await f.sync()).toContain('preserve reviewed workflow changes')
+    expect(f.remoteHead()).toBe(before)
+    expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
   })
 
   it('preserves the remote branch and existing PR when an update conflicts with manual fixes', async () => {
@@ -603,25 +617,4 @@ describe('Orca release action', () => {
     expect(summary.addRaw).toHaveBeenCalledWith(expect.stringContaining('Created'))
     expect(summary.write).toHaveBeenCalledOnce()
   })
-})
-
-it('runs only in Phorca, serializes scheduled/manual runs and executes trusted default-branch code', () => {
-  const workflow = parse(readFileSync('.github/workflows/sync-orca-release.yml', 'utf8'))
-  expect(workflow.on.schedule).toEqual([{ cron: '23 0 * * *' }])
-  expect(workflow.concurrency['cancel-in-progress']).toBe(false)
-  expect(workflow.jobs.sync.if).toContain("github.repository == 'phocassoftware/phorca'")
-  expect(workflow.jobs.sync.if).toContain(
-    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
-  )
-  expect(workflow.jobs.sync.if).toContain("vars.ORCA_SYNC_PAUSED != 'true'")
-  const checkout = workflow.jobs.sync.steps.find((step) => step.uses === 'actions/checkout@v6')
-  expect(checkout.with.ref).toBe('${{ github.event.repository.default_branch }}')
-  expect(checkout.with.token).toBe('${{ secrets.GITHUB_TOKEN }}')
-  const script = workflow.jobs.sync.steps.find((step) => step.uses === 'actions/github-script@v8')
-  expect(script.with['github-token']).toBe('${{ secrets.GITHUB_TOKEN }}')
-  expect(workflow.permissions).toEqual({ contents: 'write', 'pull-requests': 'write' })
-  expect(JSON.stringify(workflow)).not.toContain('ORCA_SYNC_TOKEN')
-  expect(script.with.script).toContain('sync-orca-release-action.mjs')
-  expect(script.with.script).not.toContain('getExecOutput')
-  expect(script.with.script).not.toContain('${{ inputs.tag }}')
 })

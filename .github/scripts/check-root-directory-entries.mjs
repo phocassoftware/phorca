@@ -24,6 +24,7 @@ function readRootEntries(sha) {
 // Keep explicitly requested root additions allowed until the base tree carries them.
 const REVIEWED_ROOT_ENTRIES = new Map([
   ['cloud', 'tree'],
+  ['opencode.json', 'blob'],
   ['MERGE-CONFLICTS.md', 'blob']
 ])
 

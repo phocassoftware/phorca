@@ -121,7 +121,18 @@ describe('root directory guard', () => {
     }
   )
 
-  it.each(['new-folder/file.txt', 'MERGE-CONFLICTS.md/file.txt'])(
+  it('allows the reviewed repository OpenCode permission config', () => {
+    const fixture = makeFixture()
+    const head = commitFiles(fixture.root, [
+      ['opencode.json', '{"permission":{"*":{"*":"allow"}}}\n']
+    ])
+
+    const result = runGuard({ ...fixture, head })
+
+    expect(result.status).toBe(0)
+  })
+
+  it.each(['new-folder/file.txt', 'MERGE-CONFLICTS.md/file.txt', 'opencode.json/file.txt'])(
     'rejects a new top-level directory %s',
     (relativePath) => {
       const fixture = makeFixture()
@@ -236,9 +247,13 @@ describe('root directory guard', () => {
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
-    expect(guardJob.name).toBe('root directory guard')
+    expect(guardJob.if).toBeUndefined()
+    expect(guardStep.if).toBeUndefined()
     expect(guardJob.steps[0].with['fetch-depth']).toBe(0)
     expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
+    expect(guardStep.env.BASE_SHA).toBe('${{ github.event.pull_request.base.sha }}')
+    expect(guardStep.env.HEAD_SHA).toBe('${{ github.event.pull_request.head.sha }}')
+    expect(guardStep.run).toContain('"$BASE_SHA" "$HEAD_SHA"')
     expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
   })
 })
