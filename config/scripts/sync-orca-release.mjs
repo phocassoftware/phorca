@@ -78,7 +78,9 @@ Maintainers: attach evidence for any upstream UI changes before merging.
 
 ## Testing
 
-- [ ] PR checks pass
+No automatic PR checks run in Phorca. Record the commands, results and any remaining verification gaps.
+
+- [ ] Relevant local checks completed and results recorded
 - [ ] Phorca managed security controls and both Codex and Claude behavior checked
 - [ ] Upstream changes reviewed on relevant platforms, including SSH and folder workspaces
 
@@ -187,7 +189,7 @@ export async function syncOrcaRelease({
     releases = await github.paginate(github.rest.repos.listReleases, { ...UPSTREAM, per_page: 100 })
   }
   const release = selectOrcaRelease(releases, { now, overrideTag })
-  if (!release) {
+  if (!release && (!pull || pull.merged_at)) {
     return 'No stable desktop Orca release is at least 72 hours old.'
   }
 
@@ -199,6 +201,7 @@ export async function syncOrcaRelease({
     ''
   const describedVersion = parseDesktopStableTag(describedTag)
   const keepNewerRelease =
+    release &&
     !pull?.merged_at &&
     describedVersion &&
     compareDesktopVersions(parseDesktopStableTag(release.tag_name), describedVersion) < 0
@@ -211,15 +214,18 @@ export async function syncOrcaRelease({
   if ((await runGit(['status', '--porcelain'])).stdout.trim()) {
     throw new Error('Orca sync requires a clean, disposable workflow checkout.')
   }
-  await runGit([
-    'fetch',
-    '--no-tags',
-    UPSTREAM_URL,
-    `+refs/tags/${release.tag_name}:${RELEASE_REF}`
-  ])
-  const releaseSha = (await runGit(['rev-parse', `${RELEASE_REF}^{commit}`])).stdout.trim()
+  let releaseSha = ''
+  if (release) {
+    await runGit([
+      'fetch',
+      '--no-tags',
+      UPSTREAM_URL,
+      `+refs/tags/${release.tag_name}:${RELEASE_REF}`
+    ])
+    releaseSha = (await runGit(['rev-parse', `${RELEASE_REF}^{commit}`])).stdout.trim()
+  }
   const baseRef = `refs/remotes/origin/${base}`
-  const alreadyInBase = await ancestor(releaseSha, baseRef)
+  const alreadyInBase = Boolean(release) && (await ancestor(releaseSha, baseRef))
 
   const remoteRef = `refs/heads/${ORCA_SYNC_BRANCH}`
   const remote = await runGit(['ls-remote', '--exit-code', '--heads', 'origin', remoteRef], [0, 2])
@@ -229,6 +235,9 @@ export async function syncOrcaRelease({
     await runGit(['fetch', '--no-tags', 'origin', `+${remoteRef}:refs/remotes/orca-sync/previous`])
     // Only retire a branch whose entire history is already safely in Phorca.
     preserveBranch = !(await ancestor(expectedHead, baseRef))
+  }
+  if (!release && !preserveBranch) {
+    return 'No stable desktop Orca release is at least 72 hours old.'
   }
   if (alreadyInBase && !preserveBranch) {
     return `Phorca already includes Orca ${release.tag_name}.`
@@ -278,10 +287,10 @@ export async function syncOrcaRelease({
 
   await runGit(['config', 'user.name', 'github-actions[bot]'])
   await runGit(['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'])
-  let changed = true
+  let changed = Boolean(release)
   if (preserveBranch) {
     await runGit(['checkout', '-B', ORCA_SYNC_BRANCH, expectedHead])
-    changed = !keepNewerRelease && !(await ancestor(releaseSha, 'HEAD'))
+    changed = Boolean(release) && !keepNewerRelease && !(await ancestor(releaseSha, 'HEAD'))
     if (changed) {
       await runGit(['merge', '--no-commit', '--no-ff', releaseSha], [0, 1])
       await restorePhorcaPolicy(baseRef)
@@ -316,11 +325,12 @@ export async function syncOrcaRelease({
     ])
   }
 
-  const description = releaseDescription(release, overrideTag)
-  const title = `AI-101 Update Phorca to Orca ${release.tag_name}`
+  const description = release ? releaseDescription(release, overrideTag) : pull.body
+  const title = release ? `AI-101 Update Phorca to Orca ${release.tag_name}` : pull.title
   if (pull && !pull.merged_at) {
     const desiredTitle = keepNewerRelease ? pull.title : title
-    const desiredBody = keepNewerRelease ? pull.body : updatedDescription(pull.body, description)
+    const desiredBody =
+      !release || keepNewerRelease ? pull.body : updatedDescription(pull.body, description)
     const needsUpdate =
       pull.state === 'closed' ||
       (pull.base?.ref ?? base) !== base ||
@@ -336,7 +346,11 @@ export async function syncOrcaRelease({
         body: desiredBody
       })
     }
-    return `${changed || policyChanges || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${keepNewerRelease ? describedTag : release.tag_name}.`
+    const outcome = changed || policyChanges || needsUpdate ? 'Updated' : 'Kept'
+    if (!release) {
+      return `${outcome} ${pull.html_url}; no eligible Orca release, Phorca's workflow and retired-test policy is current.`
+    }
+    return `${outcome} ${pull.html_url}; the branch includes Orca ${keepNewerRelease ? describedTag : release.tag_name}.`
   }
   const created = await github.rest.pulls.create({
     ...repo,

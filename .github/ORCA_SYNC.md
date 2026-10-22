@@ -39,6 +39,9 @@ Production scripts, surviving tests and `.test.ts` files continue merging
 upstream changes normally; surviving tests remain available locally, not as
 automatic PR gates.
 
+New sync PRs request recorded local verification commands, results and any
+remaining gaps; they do not imply that automatic PR checks ran.
+
 Run the sync regressions locally before changing the update mechanism:
 
 ```sh
@@ -107,9 +110,13 @@ Git hooks, and does not install dependencies or execute upstream code.
   Orca release is eligible. Upstream workflow additions, edits and deletions are
   all excluded, and conflicts confined to those files do not block updates.
 - Listed retired tests remain deleted on new and existing update branches,
-  including after later upstream edits to those files. A rerun removes a stale
-  listed test from an existing PR even without a new release. Other test files
+  including after later upstream edits to those files. Policy-only refreshes
+  also run when the release API returns no eligible candidate, keeping the PR's
+  selected-release title/body and upstream source unchanged. Other test files
   merge normally and can still require manual conflict resolution.
+- With no eligible release and no existing unmerged sync branch, nothing is
+  created. Closing an unmerged PR still pauses scheduled updates; a manual run
+  can resume it without waiting for an eligible release.
 
 The first PR can show merge conflicts with Phorca. Review them and run relevant
 local checks before merging. Organization-required reviews still apply.

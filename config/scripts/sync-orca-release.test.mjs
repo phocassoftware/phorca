@@ -231,6 +231,15 @@ describe('Orca sync with real Git repositories', () => {
     expect(readFileSync(join(f.checkout, 'untracked.txt'), 'utf8')).toBe('keep this work\n')
   })
 
+  it('does not create an update branch or PR when no release is eligible', async () => {
+    const f = fixture()
+    f.setReleases([])
+    await f.sync()
+    expect(f.local(['ls-remote', '--heads', 'origin', `refs/heads/${ORCA_SYNC_BRANCH}`])).toBe('')
+    expect(f.pulls).toEqual([])
+    expect(readFileSync(join(f.checkout, 'desktop.txt'), 'utf8')).toBe('old\n')
+  })
+
   it('creates one PR from the release and a merge retains both upstream and Phorca changes', async () => {
     const f = fixture()
     expect(await f.sync()).toContain('Created')
@@ -278,20 +287,23 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.github.rest.pulls.update).toHaveBeenCalledOnce()
   })
 
-  it('preserves reviewed CI changes on the pending PR instead of replacing them with main', async () => {
-    const f = fixture()
-    await f.sync()
-    writeFileSync(join(f.checkout, '.github', 'workflows', 'ci.yml'), 'Reviewed Phorca CI\n')
-    f.local(['add', '.'])
-    f.local(['commit', '-m', 'Review CI for the release'])
-    f.local(['push', 'origin', `HEAD:refs/heads/${ORCA_SYNC_BRANCH}`])
-    const before = f.remoteHead()
-    f.addRelease('v1.4.224', 'newest')
-    f.setReleases([release('v1.4.224')])
-    expect(await f.sync()).toContain('preserve reviewed workflow changes')
-    expect(f.remoteHead()).toBe(before)
-    expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
-  })
+  it.each([true, false])(
+    'preserves reviewed CI changes on the pending PR (eligible release: %s)',
+    async (eligible) => {
+      const f = fixture()
+      await f.sync()
+      writeFileSync(join(f.checkout, '.github', 'workflows', 'ci.yml'), 'Reviewed Phorca CI\n')
+      f.local(['add', '.'])
+      f.local(['commit', '-m', 'Review CI for the release'])
+      f.local(['push', 'origin', `HEAD:refs/heads/${ORCA_SYNC_BRANCH}`])
+      const before = f.remoteHead()
+      f.addRelease('v1.4.224', 'newest')
+      f.setReleases(eligible ? [release('v1.4.224')] : [])
+      expect(await f.sync()).toContain('preserve reviewed workflow changes')
+      expect(f.remoteHead()).toBe(before)
+      expect(f.github.rest.pulls.update).not.toHaveBeenCalled()
+    }
+  )
 
   it('preserves the remote branch and existing PR when an update conflicts with manual fixes', async () => {
     const f = fixture()
@@ -309,17 +321,21 @@ describe('Orca sync with real Git repositories', () => {
     expect(f.local(['status', '--porcelain'])).toBe('')
   })
 
-  it('pauses after a rejected PR and allows a manual run to reopen it', async () => {
-    const f = fixture()
-    await f.sync()
-    f.pulls[0].state = 'closed'
-    f.git.mockClear()
-    expect(await f.sync()).toContain('paused')
-    expect(f.git).not.toHaveBeenCalled()
-    await f.sync({ manual: true })
-    expect(f.pulls[0].state).toBe('open')
-    expect(f.github.rest.pulls.create).toHaveBeenCalledOnce()
-  })
+  it.each([true, false])(
+    'pauses after a rejected PR and allows a manual run to reopen it (eligible release: %s)',
+    async (eligible) => {
+      const f = fixture()
+      await f.sync()
+      f.setReleases(eligible ? [release('v1.4.223')] : [])
+      f.pulls[0].state = 'closed'
+      f.git.mockClear()
+      expect(await f.sync()).toContain('paused')
+      expect(f.git).not.toHaveBeenCalled()
+      await f.sync({ manual: true })
+      expect(f.pulls[0].state).toBe('open')
+      expect(f.github.rest.pulls.create).toHaveBeenCalledOnce()
+    }
+  )
 
   it.each([true, false])(
     'starts the next PR after a merge (branch deleted: %s)',
@@ -565,28 +581,43 @@ describe('Orca sync with real Git repositories', () => {
     )
   })
 
-  it('removes a retired test from an existing PR without waiting for a new release', async () => {
-    const f = fixture()
-    await f.sync()
-    const title = f.pulls[0].title
-    const body = f.pulls[0].body
-    const retiredTest = 'config/scripts/assert-github-release-is-draft.test.mjs'
-    mkdirSync(join(f.checkout, 'config', 'scripts'), { recursive: true })
-    writeFileSync(join(f.checkout, retiredTest), 'Test from an older sync policy\n')
-    f.local(['add', retiredTest])
-    f.local(['commit', '-m', 'Keep a test from the older sync policy'])
-    f.local(['push', 'origin', ORCA_SYNC_BRANCH])
-    const oldHead = f.remoteHead()
+  it.each([true, false])(
+    'refreshes retired tests and workflows on an existing PR (eligible release: %s)',
+    async (eligible) => {
+      const f = fixture()
+      await f.sync()
+      f.pulls[0].body += '\nReviewer note: keep the manual integration fix.\n'
+      const title = f.pulls[0].title
+      const body = f.pulls[0].body
+      const retiredTest = 'config/scripts/assert-github-release-is-draft.test.mjs'
+      mkdirSync(join(f.checkout, 'config', 'scripts'), { recursive: true })
+      writeFileSync(join(f.checkout, retiredTest), 'Test from an older sync policy\n')
+      f.local(['add', retiredTest])
+      f.local(['commit', '-m', 'Keep a test from the older sync policy'])
+      f.local(['push', 'origin', ORCA_SYNC_BRANCH])
+      const oldHead = f.remoteHead()
 
-    await f.sync()
-    expect(f.remoteHead()).not.toBe(oldHead)
-    expect(f.local(['ls-tree', '--name-only', 'HEAD', '--', retiredTest])).toBe('')
-    expect(f.pulls[0].title).toBe(title)
-    expect(f.pulls[0].body).toBe(body)
-    const refreshed = f.remoteHead()
-    await f.sync()
-    expect(f.remoteHead()).toBe(refreshed)
-  })
+      f.local(['checkout', 'main'])
+      writeFileSync(join(f.checkout, '.github', 'workflows', 'ci.yml'), 'Current Phorca CI\n')
+      f.local(['add', '.github/workflows'])
+      f.local(['commit', '-m', 'Update the default branch workflow policy'])
+      f.local(['push', 'origin', 'main'])
+      f.setReleases(eligible ? [release('v1.4.223')] : [])
+
+      await f.sync()
+      expect(f.remoteHead()).not.toBe(oldHead)
+      expect(f.local(['ls-tree', '--name-only', 'HEAD', '--', retiredTest])).toBe('')
+      expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
+        f.local(['rev-parse', 'origin/main:.github/workflows'])
+      )
+      expect(readFileSync(join(f.checkout, 'desktop.txt'), 'utf8')).toBe('new\n')
+      expect(f.pulls[0].title).toBe(title)
+      expect(f.pulls[0].body).toBe(body)
+      const refreshed = f.remoteHead()
+      await f.sync()
+      expect(f.remoteHead()).toBe(refreshed)
+    }
+  )
 
   it('excludes upstream workflows even when Phorca has removed the whole workflow directory', async () => {
     const f = fixture({ keepWorkflows: false })
