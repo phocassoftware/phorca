@@ -2581,21 +2581,13 @@
         "gh run view 34045578306 --log",
         "gh run view 34045975180 --log",
         "gh run view 34046230389 --log",
-        "ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/ssh-localhost-e2e-routing.test.mjs"
+        "ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1"
       ],
-      "testFiles": [
-        "tests/e2e/ssh-localhost.spec.ts",
-        "config/scripts/ssh-localhost-e2e-routing.test.mjs"
-      ],
+      "testFiles": ["tests/e2e/ssh-localhost.spec.ts"],
       "assertionRefs": [
         {
           "file": "tests/e2e/ssh-localhost.spec.ts",
           "assertions": ["routes a terminal and agent-hook status over localhost SSH"]
-        },
-        {
-          "file": "config/scripts/ssh-localhost-e2e-routing.test.mjs",
-          "assertions": ["selects the localhost journey for its remote hook authorities"]
         }
       ],
       "evidenceRuns": [
@@ -18876,8 +18868,8 @@
         "node config/scripts/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts",
         "pnpm run build:relay",
         "node config/scripts/relay-watcher-fault-harness.mjs"
       ],
@@ -18941,7 +18933,6 @@
         "src/relay/git-handler.test.ts",
         "src/relay/subprocess.test.ts",
         "src/main/ssh/ssh-relay-versioned-install.test.ts",
-        "config/scripts/package-electron-runtime-contract.test.mjs",
         "config/scripts/relay-watcher-fault-harness.mjs"
       ],
       "assertionRefs": [
@@ -19369,10 +19360,6 @@
           ]
         },
         {
-          "file": "config/scripts/package-electron-runtime-contract.test.mjs",
-          "assertions": ["every release platform packages and gates the hashed watcher child"]
-        },
-        {
           "file": "config/scripts/runtime-file-watcher-resource-probe.mjs",
           "assertions": [
             "five healthy roots share one exact watcher PID within the per-child RSS budget",
@@ -19447,15 +19434,6 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-          "result": "passed",
-          "durationSeconds": 10.01,
-          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm run build:electron-vite",
           "result": "passed",
           "durationSeconds": 24.41,
@@ -19519,15 +19497,6 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-          "result": "passed",
-          "durationSeconds": 10.69,
-          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests, including watcher/PTY removal fencing and recursive deletion failure behavior."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm run build:electron-vite",
           "result": "passed",
           "durationSeconds": 24,
@@ -19586,15 +19555,6 @@
           "result": "passed",
           "durationSeconds": 0.55,
           "summary": "Five healthy roots shared one child at 50,160 KiB RSS and 5.6% sampled CPU; four quarantine children totaled 199,968 KiB RSS and 16.7% sampled CPU, hard per-child and aggregate RSS/CPU budgets passed, the eight-child reservation cap rejected the next launch, and every exact PID exited during cleanup."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-          "result": "passed",
-          "durationSeconds": 9.79,
-          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
         },
         {
           "date": "2026-07-12",
@@ -20306,13 +20266,9 @@
       "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
       "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
       "commands": [
-        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
+        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs"
       ],
-      "testFiles": [
-        "config/scripts/smoke-managed-hook-runtime-node18.mjs",
-        "config/scripts/pr-workflow-parallelism.test.mjs"
-      ],
+      "testFiles": ["config/scripts/smoke-managed-hook-runtime-node18.mjs"],
       "assertionRefs": [
         {
           "file": "config/scripts/smoke-managed-hook-runtime-node18.mjs",
@@ -20320,12 +20276,6 @@
             "all six built companions load and export installManagedHooks under Node 18",
             "Codex and Claude installations both succeed in an isolated home",
             "both generated configs reference executable managed hook scripts"
-          ]
-        },
-        {
-          "file": "config/scripts/pr-workflow-parallelism.test.mjs",
-          "assertions": [
-            "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
           ]
         }
       ],
@@ -21382,13 +21332,12 @@
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/verify-wsl-e2e-participation.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/wsl-e2e-lane-contract.test.mjs",
         "config/scripts/verify-wsl-e2e-participation.test.mjs"
       ],
       "assertionRefs": [
