@@ -518,6 +518,76 @@ describe('Orca sync with real Git repositories', () => {
     f.local(['merge-base', '--is-ancestor', 'refs/remotes/orca-sync/release', f.remoteHead()])
   })
 
+  it('keeps retired tests deleted while other upstream scripts and tests continue updating', async () => {
+    const f = fixture()
+    const retiredTests = JSON.parse(
+      readFileSync(new URL('../phorca-retired-tests.json', import.meta.url), 'utf8')
+    )
+    const retainedPaths = [
+      'config/scripts/assert-github-release-is-draft.mjs',
+      'config/scripts/new-upstream.test.mjs',
+      'config/scripts/new-upstream.test.ts'
+    ]
+    mkdirSync(join(f.upstream, 'config', 'scripts'), { recursive: true })
+    const updateScripts = (version) => {
+      for (const path of [...retiredTests, ...retainedPaths]) {
+        writeFileSync(join(f.upstream, path), `${version}: ${path}\n`)
+      }
+    }
+    updateScripts('first')
+    f.addRelease('v1.4.224', 'first source update')
+    f.setReleases([release('v1.4.224')])
+    await f.sync()
+    expect(f.local(['ls-tree', '-r', '--name-only', 'HEAD', '--', 'config/scripts'])).toBe(
+      [...retainedPaths].sort().join('\n')
+    )
+
+    updateScripts('second')
+    f.addRelease('v1.4.225', 'second source update')
+    f.setReleases([release('v1.4.225')])
+    await f.sync()
+    expect(f.local(['diff', '--name-only', '--diff-filter=U'])).toBe('')
+    expect(f.local(['ls-tree', '-r', '--name-only', 'HEAD', '--', 'config/scripts'])).toBe(
+      [...retainedPaths].sort().join('\n')
+    )
+    for (const path of retainedPaths) {
+      expect(readFileSync(join(f.checkout, path), 'utf8')).toBe(`second: ${path}\n`)
+    }
+    expect(readFileSync(join(f.checkout, 'desktop.txt'), 'utf8')).toBe('second source update\n')
+    const head = f.remoteHead()
+    await f.sync()
+    expect(f.remoteHead()).toBe(head)
+
+    f.local(['checkout', 'main'])
+    f.local(['merge', '--no-edit', ORCA_SYNC_BRANCH])
+    expect(f.local(['ls-tree', '-r', '--name-only', 'HEAD', '--', 'config/scripts'])).toBe(
+      [...retainedPaths].sort().join('\n')
+    )
+  })
+
+  it('removes a retired test from an existing PR without waiting for a new release', async () => {
+    const f = fixture()
+    await f.sync()
+    const title = f.pulls[0].title
+    const body = f.pulls[0].body
+    const retiredTest = 'config/scripts/assert-github-release-is-draft.test.mjs'
+    mkdirSync(join(f.checkout, 'config', 'scripts'), { recursive: true })
+    writeFileSync(join(f.checkout, retiredTest), 'Test from an older sync policy\n')
+    f.local(['add', retiredTest])
+    f.local(['commit', '-m', 'Keep a test from the older sync policy'])
+    f.local(['push', 'origin', ORCA_SYNC_BRANCH])
+    const oldHead = f.remoteHead()
+
+    await f.sync()
+    expect(f.remoteHead()).not.toBe(oldHead)
+    expect(f.local(['ls-tree', '--name-only', 'HEAD', '--', retiredTest])).toBe('')
+    expect(f.pulls[0].title).toBe(title)
+    expect(f.pulls[0].body).toBe(body)
+    const refreshed = f.remoteHead()
+    await f.sync()
+    expect(f.remoteHead()).toBe(refreshed)
+  })
+
   it('excludes upstream workflows even when Phorca has removed the whole workflow directory', async () => {
     const f = fixture({ keepWorkflows: false })
     await f.sync()

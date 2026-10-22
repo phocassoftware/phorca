@@ -5,6 +5,9 @@ Thanks for contributing to Orca.
 **Phorca fork:** only the [Sync Orca release](ORCA_SYNC.md) workflow is retained. The
 upstream PR/build/deployment/release workflows described below are not installed
 in this fork. Run checks locally; they are not automatic PR gates.
+Selected `config/scripts/*.test.mjs` suites are also retired; the exact paths are
+listed in [`config/phorca-retired-tests.json`](../config/phorca-retired-tests.json).
+Their remaining script/build/runtime coverage is not retained elsewhere.
 
 ## Before You Start
 

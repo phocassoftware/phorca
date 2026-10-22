@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { mergeMarkedBlock } from '../../.github/scripts/pr-test-loc-table.mjs'
 import { compareDesktopVersions } from './create-draft-release.mjs'
 import { latestStableDesktopRelease, parseDesktopStableTag } from './latest-stable-release.mjs'
@@ -10,6 +11,10 @@ const DESCRIBED_REF = 'refs/remotes/orca-sync/described'
 const MINIMUM_AGE_MS = 72 * 60 * 60 * 1000
 const BODY_START = '<!-- orca-sync:start -->'
 const BODY_END = '<!-- orca-sync:end -->'
+// Load the default branch's policy before Git checkout replaces its files.
+const RETIRED_TESTS = JSON.parse(
+  readFileSync(new URL('../phorca-retired-tests.json', import.meta.url), 'utf8')
+)
 
 function validateOverrideTag(tag) {
   if (tag && !parseDesktopStableTag(tag)) {
@@ -129,7 +134,7 @@ export async function syncOrcaRelease({
   }
   const ancestor = async (older, newer) =>
     (await runGit(['merge-base', '--is-ancestor', older, newer], [0, 1])).exitCode === 0
-  const restoreWorkflows = async (source) => {
+  const restorePhorcaPolicy = async (source) => {
     await runGit(['rm', '-r', '-f', '--ignore-unmatch', '--', '.github/workflows'])
     if (
       (await runGit(['ls-tree', '--name-only', source, '--', '.github/workflows'])).stdout.trim()
@@ -144,6 +149,7 @@ export async function syncOrcaRelease({
         '.github/workflows'
       ])
     }
+    await runGit(['rm', '-f', '--ignore-unmatch', '--', ...RETIRED_TESTS])
   }
 
   const pulls = await github.paginate(github.rest.pulls.list, {
@@ -278,7 +284,7 @@ export async function syncOrcaRelease({
     changed = !keepNewerRelease && !(await ancestor(releaseSha, 'HEAD'))
     if (changed) {
       await runGit(['merge', '--no-commit', '--no-ff', releaseSha], [0, 1])
-      await restoreWorkflows(baseRef)
+      await restorePhorcaPolicy(baseRef)
       const conflicts = (await runGit(['diff', '--name-only', '--diff-filter=U'])).stdout.trim()
       if (conflicts) {
         await runGit(['merge', '--abort'])
@@ -294,13 +300,13 @@ export async function syncOrcaRelease({
     await runGit(['checkout', '-B', ORCA_SYNC_BRANCH, releaseSha])
   }
 
-  // GITHUB_TOKEN cannot push a tip whose workflow files differ from Phorca's default branch.
-  await restoreWorkflows(baseRef)
-  const workflowChanges = (await runGit(['diff', '--cached', '--quiet'], [0, 1])).exitCode !== 0
-  if (workflowChanges) {
+  await restorePhorcaPolicy(baseRef)
+  const policyChanges = (await runGit(['diff', '--cached', '--quiet'], [0, 1])).exitCode !== 0
+  if (policyChanges) {
     await runGit(['commit', '-m', 'AI-101 Keep Phorca workflow files during Orca sync'])
   }
-  if (changed || workflowChanges) {
+  if (changed || policyChanges) {
+    // GITHUB_TOKEN cannot push a tip whose workflow files differ from Phorca's default branch.
     await runGit(['diff', '--quiet', baseRef, 'HEAD', '--', '.github/workflows'])
     await runGit([
       'push',
@@ -330,7 +336,7 @@ export async function syncOrcaRelease({
         body: desiredBody
       })
     }
-    return `${changed || workflowChanges || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${keepNewerRelease ? describedTag : release.tag_name}.`
+    return `${changed || policyChanges || needsUpdate ? 'Updated' : 'Kept'} ${pull.html_url}; the branch includes Orca ${keepNewerRelease ? describedTag : release.tag_name}.`
   }
   const created = await github.rest.pulls.create({
     ...repo,

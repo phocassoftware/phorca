@@ -20,14 +20,24 @@ conditions. Git history retains them if a maintainer later chooses to restore on
 
 Use this sync for upstream updates: it restores the entire workflow directory
 from Phorca's default branch, excluding upstream workflow additions, edits and
-deletions. Direct upstream merges and deliberate workflow additions do not have
-that protection. Retiring upstream workflow-contract tests can still cause
-conflicts outside that directory; review those separately on later updates.
+deletions. It also keeps the exact test paths in
+[`config/phorca-retired-tests.json`](../config/phorca-retired-tests.json) deleted,
+resolving upstream modify/delete conflicts on those paths before checking for
+other conflicts. Direct upstream merges do not have either protection.
+
+The retirement list covers selected `config/scripts/*.test.mjs` suites, not the
+whole directory or every test matching that suffix. Additions to upstream tests
+are not automatically excluded. Keep every listed file deleted on Phorca's
+default branch; retire another test by deleting it and adding its exact path
+through review. To restore one, remove its entry and restore the test through
+review.
 
 This workflow opens or updates a source-sync PR. It does not publish Phorca
-builds or run PR, build, deployment or security-check workflows. Supporting
-scripts and application tests remain available locally; tests are not an
-automatic PR gate under this policy.
+builds or run PR, build, deployment or security-check workflows. Retiring mixed
+test suites also removes their remaining script, build and runtime coverage.
+Production scripts, surviving tests and `.test.ts` files continue merging
+upstream changes normally; surviving tests remain available locally, not as
+automatic PR gates.
 
 Run the sync regressions locally before changing the update mechanism:
 
@@ -81,20 +91,25 @@ Git hooks, and does not install dependencies or execute upstream code.
   Remove it or set it to `false` to resume. Manual runs remain available.
 - Use **Run workflow** with an optional stable release tag to bypass the
   72-hour wait. A release older than the PR's selected version is not merged,
-  even from a divergent upstream branch. Workflow files can still be refreshed.
-  A version already in Phorca or the update branch is a no-op.
+  even from a divergent upstream branch. Workflow and retired-test policy can
+  still be refreshed on an existing PR. Releases already in Phorca need no new PR.
   Always select Phorca's default branch in **Use workflow from**; other branches
   and tags are rejected. The release is chosen with the separate `tag` input.
 - Closing an unmerged sync PR pauses updates until a manual run reopens it.
-- Resolve conflicts and push fixes on the PR branch. Those commits survive
-  subsequent updates. If a later update conflicts, the workflow reports failure
-  and preserves the remote branch. Resolve it manually and retry.
+- Resolve conflicts and push fixes on the PR branch. Fixes outside the retired
+  test paths survive subsequent updates. If a later update conflicts, the
+  workflow reports failure and preserves the remote branch. Resolve it manually
+  and retry.
 - Reviewed workflow changes on the pending PR pause further sync updates until
   that PR is merged, so a scheduled run cannot overwrite its CI fixes.
 - Review and apply workflow edits separately to Phorca's default branch. The
   next sync refreshes the PR's workflow files from that branch, even if no new
   Orca release is eligible. Upstream workflow additions, edits and deletions are
   all excluded, and conflicts confined to those files do not block updates.
+- Listed retired tests remain deleted on new and existing update branches,
+  including after later upstream edits to those files. A rerun removes a stale
+  listed test from an existing PR even without a new release. Other test files
+  merge normally and can still require manual conflict resolution.
 
 The first PR can show merge conflicts with Phorca. Review them and run relevant
 local checks before merging. Organization-required reviews still apply.
