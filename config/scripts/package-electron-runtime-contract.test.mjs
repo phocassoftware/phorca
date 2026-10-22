@@ -72,30 +72,4 @@ describe('Electron runtime package contract', () => {
       )
     }
   })
-
-  it('keeps release-cut signing provenance on GitHub-hosted runners', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const buildMatrixRunners = releaseWorkflow.jobs.build.strategy.matrix.include.map(
-      ({ os }) => os
-    )
-    const releaseWorkflowText = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
-    const macDispatchStep = releaseWorkflow.jobs['build-mac'].steps.find(
-      (step) => step.name === 'Run isolated macOS release build'
-    )
-
-    expect(releaseWorkflowText).not.toContain('blacksmith-')
-    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
-    expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
-    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
-    expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
-    expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
-    expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
-    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build')
-    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
-  })
 })

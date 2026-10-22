@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
-import { parse } from 'yaml'
 import {
   classifyE2eJobs,
   ORCAD_AUTO_CONVERT_E2E_SPEC,
@@ -13,7 +12,6 @@ import {
 import { selectPrE2eSpecs, shouldRunReusablePrE2e } from './pr-e2e-source-routing.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
-const jobs = parse(readFileSync(resolve(root, '.github/workflows/e2e.yml'), 'utf8')).jobs
 
 function expectRouted(files, spec) {
   for (const file of files) {
@@ -84,30 +82,6 @@ it('builds the e2e app when only a build-dependent orcad spec is requested', () 
       e2e_needs_build: true
     })
   }
-  expect(jobs['orcad-auto-convert-docker'].needs).toEqual(['build', 'prepare-native-cache'])
-})
-
-it('runs the auto-convert lane only when routed, not on every SSH source change', () => {
-  const condition = jobs['orcad-auto-convert-docker'].if
-  for (const spec of [
-    ORCAD_AUTO_CONVERT_E2E_SPEC,
-    ORCAD_IDLE_EXIT_E2E_SPEC,
-    ORCAD_OPEN_IN_OWNER_E2E_SPEC
-  ]) {
-    expect(condition).toContain(`contains(inputs.test_files, '${spec}')`)
-  }
-  expect(condition).not.toContain('ssh_source_changed')
-})
-
-it('runs both Windows serve specs on one runner, each only when requested', () => {
-  expect(jobs['windows-missing-appdata-startup']).toBeUndefined()
-  const job = jobs['orcad-serve-mode-switch-windows']
-  for (const spec of [ORCAD_SERVE_MODE_SWITCH_E2E_SPEC, WINDOWS_MISSING_APPDATA_E2E_SPEC]) {
-    expect(job.if, spec).toContain(`contains(inputs.test_files, '${spec}')`)
-    const step = job.steps.find((candidate) => candidate.run?.includes(spec))
-    expect(step.if, spec).toContain(`contains(inputs.test_files, '${spec}')`)
-    expect(step.env.ORCA_STARTUP_DIAGNOSTICS, spec).toBeUndefined()
-  }
 })
 
 it('routes managed target-owner guards and menus to the real launch regression', () => {
@@ -131,9 +105,4 @@ it('routes managed target-owner guards and menus to the real launch regression',
   expect(selectPrE2eSpecs(['src/renderer/src/lib/local-path-open-guard.test.ts'])).not.toContain(
     ORCAD_OPEN_IN_OWNER_E2E_SPEC
   )
-  expect(
-    jobs['orcad-auto-convert-docker'].steps.some((step) =>
-      step.run?.includes(ORCAD_OPEN_IN_OWNER_E2E_SPEC)
-    )
-  ).toBe(true)
 })

@@ -131,29 +131,12 @@ describe('CI native cache ownership', () => {
     }
   )
 
-  it('uses requested identity on both restores and saves the Node ABI before Windows switches to Electron', () => {
+  it('uses requested identity on restores and saves', () => {
     for (const step of native.runs.steps.filter((step) => step.uses?.startsWith('actions/cache'))) {
       expect(step.with.key).toBe('${{ steps.native-cache-scope.outputs.key }}')
       expect(step.with.path.trim().split('\n')).toEqual(paths)
       expect(step.with['restore-keys']).toBeUndefined()
     }
-    const job = parse(readFileSync('.github/workflows/pr.yml', 'utf8')).jobs.package_windows
-    const save = job.steps.find((step) => step.name === 'Save compiled Node native modules')
-    const install = job.steps.find((step) => step.id === 'deps')
-    const build = job.steps.find((step) => step.name === 'Build package inputs')
-    const electron = job.steps.find((step) => step.name === 'Prepare Electron native runtime')
-    expect(install.with['persist-native-cache']).toBe('false')
-    expect(save.with).toEqual({
-      key: '${{ steps.deps.outputs.native-cache-key }}',
-      path: '${{ steps.deps.outputs.native-cache-path }}'
-    })
-    expect(job.steps.indexOf(save)).toBeLessThan(job.steps.indexOf(build))
-    expect(job.steps.indexOf(build)).toBeLessThan(job.steps.indexOf(electron))
-    expect(electron.uses).toBe('./.github/actions/prepare-native-runtime')
-    expect(electron.with).toEqual({
-      'native-runtime': 'electron',
-      'node-version': '${{ steps.deps.outputs.node-version }}'
-    })
     expect(native.outputs['cache-key'].value).toBe('${{ steps.native-cache-scope.outputs.key }}')
   })
 

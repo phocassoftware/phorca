@@ -12,17 +12,60 @@ It keeps `.github/workflows/` exactly as they are in Phorca's default branch;
 review Orca's workflow updates manually. The generated PR links to those files.
 The workflow does not run AI or treat Codex and Claude differently.
 
+## Single-workflow policy
+
+Phorca keeps only `sync-orca-release.yml` in `.github/workflows/`. Other upstream
+workflows are intentionally removed, not archived or guarded with fork-specific
+conditions. Git history retains them if a maintainer later chooses to restore one.
+
+Use this sync for upstream updates: it restores the entire workflow directory
+from Phorca's default branch, excluding upstream workflow additions, edits and
+deletions. Direct upstream merges and deliberate workflow additions do not have
+that protection. Retiring upstream workflow-contract tests can still cause
+conflicts outside that directory; review those separately on later updates.
+
+This workflow opens or updates a source-sync PR. It does not publish Phorca
+builds or run PR, build, deployment or security-check workflows. Supporting
+scripts and application tests remain available locally; tests are not an
+automatic PR gate under this policy.
+
+Run the sync regressions locally before changing the update mechanism:
+
+```sh
+pnpm test config/scripts/sync-orca-release.test.mjs config/scripts/sync-orca-release-api.test.mjs
+```
+
 ## Enable it
 
-1. Merge this workflow and its script into Phorca's default branch.
-2. In **Settings → Actions → General → Workflow permissions**, enable
-   **Allow GitHub Actions to create and approve pull requests**. Organization
-   policy must allow this setting. The workflow itself grants `contents: write`
-   and `pull-requests: write` to GitHub's automatically provided `GITHUB_TOKEN`.
-3. Enable the workflow in Actions and run it once manually from the default branch.
+1. Keep repository-wide Actions disabled while preparing and merging the
+   single-workflow cutover. Do not enable Actions just to inspect the workflows.
+2. List registered workflows with
+   `gh api repos/phocassoftware/phorca/actions/workflows --paginate`.
+   Disable every registered `.github/workflows/` entry except
+   `sync-orca-release.yml` using
+   `gh workflow disable WORKFLOW_ID --repo phocassoftware/phorca`.
+   Leave GitHub-managed Copilot and Dependabot entries alone. Check each command
+   succeeds; stop activation on any failure. Old branches and tags retain their
+   YAML, so deleting files on `main` alone is insufficient.
+3. Merge the cutover through the normal approved PR process. Verify the default
+   branch contains only the sync workflow, then recheck the registrations and
+   disable any other checked-in workflow discovered after the merge.
+4. In **Settings → Actions → General → Workflow permissions**, enable
+   **Allow GitHub Actions to create and approve pull requests**, if not already
+   allowed. Organization policy must allow it. The workflow grants
+   `contents: write` and `pull-requests: write` to the provided `GITHUB_TOKEN`;
+   no broader token defaults are needed.
+5. Enable sync with
+   `gh workflow enable sync-orca-release.yml --repo phocassoftware/phorca`.
+   Remove `ORCA_SYNC_PAUSED` or set it to `false` to allow scheduled updates.
+6. Enable repository-wide Actions **last**, without broadening the allowed
+   action dependencies. Verify only sync is active among checked-in workflows.
+7. Run it once from the default branch:
+   `gh workflow run sync-orca-release.yml --ref main --repo phocassoftware/phorca`.
+   Inspect the job log and resulting PR or no-op explanation; a successful run
+   with a skipped sync job is not proof. A manual run does not prove scheduling.
 
-No custom token or repository secret is needed. When the PR shows
-**Approve workflows to run**, approve its checks before merging. See
+No custom token or repository secret is needed. See
 [GitHub's token documentation](https://docs.github.com/en/actions/concepts/security/github_token)
 and [PR creation settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#preventing-github-actions-from-creating-or-approving-pull-requests).
 The sync job executes only the script from Phorca's default branch, disables
@@ -53,10 +96,21 @@ Git hooks, and does not install dependencies or execute upstream code.
   Orca release is eligible. Upstream workflow additions, edits and deletions are
   all excluded, and conflicts confined to those files do not block updates.
 
-The first PR can show merge conflicts with Phorca. Review them and the usual
-PR checks before merging, including Phorca's security controls and both agent
-integrations. Updates use force-with-lease so a concurrent human push cannot be
-overwritten. No automatic merge is performed.
+The first PR can show merge conflicts with Phorca. Review them and run relevant
+local checks before merging. Organization-required reviews still apply.
+Updates use force-with-lease so a concurrent human push cannot be overwritten.
+No automatic merge is performed.
 If pushing an update succeeds but updating its PR details fails, rerun the
 failed workflow with the same inputs. It repairs the title and release
 description without another push.
+
+## Pause or roll back
+
+`ORCA_SYNC_PAUSED=true` pauses scheduled updates, not manual dispatches. Disable
+the sync workflow or repository-wide Actions to stop new runs entirely. Disabling
+a workflow does not cancel existing runs; inspect and cancel unwanted queued or
+running jobs separately.
+
+If reverting the cutover, disable repository-wide Actions first, then revert the
+source change through review. Restore and enable only workflows a maintainer
+explicitly chooses; do not enable every workflow restored from Git history.

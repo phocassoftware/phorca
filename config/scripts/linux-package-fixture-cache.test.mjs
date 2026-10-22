@@ -9,7 +9,6 @@ const action = parse(
   readFileSync('.github/actions/prepare-linux-package-fixture/action.yml', 'utf8')
 )
 const load = action.runs.steps.find((step) => step.id === 'image')
-const workflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
 let directory
 
 afterEach(() => {
@@ -106,28 +105,11 @@ describe.runIf(process.platform !== 'win32')('fixture cache fallbacks', () => {
   })
 })
 
-it('uses exact context/platform keys and the same restore-only action in package checks', () => {
+it('uses exact context/platform keys and defaults to restore-only', () => {
   const cache = action.runs.steps.find((step) => step.id === 'cache')
   expect(cache.with.key).toContain('linux-amd64')
   expect(cache.with.key).toContain("format('config/docker/{0}/**', inputs.fixture)")
   expect(cache.with.key).toContain('.github/actions/prepare-linux-package-fixture/action.yml')
   expect(cache.with['restore-keys']).toBeUndefined()
   expect(action.inputs['save-cache'].default).toBe('false')
-  const prepared = workflow('pr').jobs.package.steps.filter((step) =>
-    step.uses?.endsWith('/prepare-linux-package-fixture')
-  )
-  expect(prepared.map((step) => step.with)).toEqual([
-    { fixture: 'daemon-shutdown-descendants' },
-    { fixture: 'headless-serve-shutdown' },
-    { fixture: 'cli-launch-contract' }
-  ])
-  const warm = workflow('ci-cache-warmup').jobs['warm-linux-package-fixtures']
-  expect(warm.steps.slice(1).map((step) => step.with.fixture)).toEqual(
-    prepared.map((step) => step.with.fixture)
-  )
-  expect(
-    warm.steps
-      .slice(1)
-      .every((step) => step.with['save-cache'] === "${{ github.event_name != 'pull_request' }}")
-  ).toBe(true)
 })

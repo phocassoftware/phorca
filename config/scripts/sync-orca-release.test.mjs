@@ -530,7 +530,7 @@ describe('Orca sync with real Git repositories', () => {
   })
 
   it.each([false, true])(
-    'refreshes Phorca workflows without a new eligible release (previous release merged: %s)',
+    'keeps only sync after workflow retirement and later releases (previous release merged: %s)',
     async (merged) => {
       const f = fixture()
       await f.sync()
@@ -548,17 +548,23 @@ describe('Orca sync with real Git repositories', () => {
       const body = f.pulls[0].body
       const previous = f.remoteHead()
       f.local(['checkout', 'main'])
-      writeFileSync(
-        join(f.checkout, '.github', 'workflows', 'ci.yml'),
-        'Manually reviewed Phorca CI\n'
-      )
+      const workflows = join(f.checkout, '.github', 'workflows')
+      rmSync(workflows, { recursive: true })
+      mkdirSync(workflows, { recursive: true })
+      writeFileSync(join(workflows, 'sync-orca-release.yml'), 'Phorca release sync\n')
       f.local(['add', '.'])
-      f.local(['commit', '-m', 'Review CI separately'])
+      f.local(['commit', '-m', 'Retire every workflow except release sync'])
       f.local(['push', 'origin', 'main'])
       await f.sync()
       expect(f.remoteHead()).not.toBe(previous)
       expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
         f.local(['rev-parse', 'origin/main:.github/workflows'])
+      )
+      expect(f.local(['ls-tree', '-r', '--name-only', 'HEAD', '--', '.github/workflows'])).toBe(
+        '.github/workflows/sync-orca-release.yml'
+      )
+      expect(readFileSync(join(workflows, 'sync-orca-release.yml'), 'utf8')).toBe(
+        'Phorca release sync\n'
       )
       expect(f.github.rest.pulls.create).toHaveBeenCalledTimes(merged ? 2 : 1)
       expect(f.pulls[0].title).toBe(title)
@@ -566,6 +572,26 @@ describe('Orca sync with real Git repositories', () => {
       const refreshed = f.remoteHead()
       await f.sync()
       expect(f.remoteHead()).toBe(refreshed)
+
+      writeFileSync(
+        join(f.upstream, '.github', 'workflows', 'another-upstream.yaml'),
+        'New upstream workflow\n'
+      )
+      f.addRelease('v1.4.225', 'next source update')
+      f.setReleases([release('v1.4.225')])
+      await f.sync()
+      expect(readFileSync(join(f.checkout, 'desktop.txt'), 'utf8')).toBe('next source update\n')
+      expect(f.local(['rev-parse', 'HEAD:.github/workflows'])).toBe(
+        f.local(['rev-parse', 'origin/main:.github/workflows'])
+      )
+      f.local(['checkout', 'main'])
+      f.local(['merge', '--no-edit', ORCA_SYNC_BRANCH])
+      expect(f.local(['ls-tree', '-r', '--name-only', 'HEAD', '--', '.github/workflows'])).toBe(
+        '.github/workflows/sync-orca-release.yml'
+      )
+      const updated = f.remoteHead()
+      await f.sync()
+      expect(f.remoteHead()).toBe(updated)
     }
   )
 })

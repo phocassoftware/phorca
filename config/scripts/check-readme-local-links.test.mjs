@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
@@ -75,15 +74,9 @@ describe('README local link check', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
   })
 
-  it('checks tracked media outside the detector sparse checkout', () => {
+  it('checks tracked media outside a sparse working tree', () => {
     const root = makeFixture(validReadmes)
-    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const checkout = workflow.jobs.code_paths.steps.find((step) =>
-      step.uses?.startsWith('actions/checkout@')
-    )
-    const patterns = checkout.with['sparse-checkout'].trim().split('\n')
-    expect(checkout.with['sparse-checkout-cone-mode']).toBe(false)
-    git(root, ['sparse-checkout', 'set', '--no-cone', ...patterns])
+    git(root, ['sparse-checkout', 'set', '--no-cone', '/README.md', '/docs/readme/'])
 
     expect(existsSync(path.join(root, 'resources/build/icon.png'))).toBe(false)
     expect(findBrokenReadmeLinks(root)).toEqual([])
@@ -156,17 +149,8 @@ describe('README local link check', () => {
     ])
   })
 
-  // Docs-only diffs skip preflight, so the detector must check README links.
-  it('runs on every PR through the ungated detector and in the lint script', () => {
+  it('runs in the lint script', () => {
     const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
-    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.code_paths
-    const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
-
-    expect(guardJob.if).toBeUndefined()
-    expect(guardJob.needs).toBeUndefined()
-    expect(step.if).toBeUndefined()
-    expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')
     expect(scripts['check:readme-local-links']).toBe(
       'node config/scripts/check-readme-local-links.mjs'
     )

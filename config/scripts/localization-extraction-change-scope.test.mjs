@@ -1,6 +1,4 @@
-import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
-import { parse } from 'yaml'
 import localizationConfig from '../i18next.config'
 import { affectsLocalizationExtraction } from './localization-extraction-change-scope.mjs'
 
@@ -93,24 +91,7 @@ it('avoids extraction for unrelated CI, documentation, and native changes', () =
   ).toBe(false)
 })
 
-it('preserves deleted and renamed inputs and falls back to extraction on detection failure', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
-  )
-  const step = workflow.jobs.preflight.steps.find(
-    (candidate) => candidate.name === 'Verify localization extraction'
-  )
-  expect(step.env).toMatchObject({
-    BASE_SHA: '${{ github.event.pull_request.base.sha }}'
-  })
-  // The base side comes from the merge ref's first parent, so the gate needs no merge base and
-  // works on a shallow checkout. The payload head SHA is no longer read: HEAD is the merged tree
-  // the gate is actually deciding about.
-  expect(step.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
-  expect(step.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
-  expect(step.run).not.toContain('--diff-filter')
-  expect(step.run).toContain('&& [ "$scope" = false ]; then')
-  expect(step.run).toMatch(/else\s+pnpm run verify:localization-extraction\s+fi/)
+it('retains extraction for source-to-documentation renames', () => {
   expect(
     affectsLocalizationExtraction(['src/old-translations.ts', 'docs/moved-translations.ts'])
   ).toBe(true)

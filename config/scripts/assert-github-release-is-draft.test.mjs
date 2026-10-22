@@ -1,15 +1,11 @@
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
 import {
   matchingDesktopReleases,
   restorePublishedDesktopReleasesToDraft
 } from './assert-github-release-is-draft.mjs'
 
 const require = createRequire(import.meta.url)
-const repoRoot = join(import.meta.dirname, '../..')
 
 function jsonResponse(body, init = {}) {
   return {
@@ -99,67 +95,9 @@ describe('restorePublishedDesktopReleasesToDraft', () => {
   })
 })
 
-describe('release draft workflow contract', () => {
-  it('keeps GitHub releases draft until publish-release undrafts complete assets', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(repoRoot, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const macWorkflow = parse(
-      readFileSync(join(repoRoot, '.github/workflows/release-mac-build.yml'), 'utf8')
-    )
+describe('release draft configuration', () => {
+  it('configures desktop release publishing as draft', () => {
     const electronBuilderConfig = require('../electron-builder.config.cjs')
-    const cutCheckout = releaseWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
-    const linuxDraftStep = releaseWorkflow.jobs.build.steps.find(
-      (step) => step.name === 'Verify release remains draft after artifact upload'
-    )
-    const publishRelease = releaseWorkflow.jobs['publish-release'].steps.find(
-      (step) => step.name === 'Publish release'
-    )
-    const macSteps = macWorkflow.jobs['build-mac'].steps
-    const abortParentStep = macSteps.find(
-      (step) => step.name === 'Abort if the parent release-cut run was cancelled'
-    )
-    const macPublishStep = macSteps.find(
-      (step) => step.name === 'Publish release artifacts (macOS)'
-    )
-    const macDraftStep = macSteps.find(
-      (step) => step.name === 'Verify release remains draft after artifact upload'
-    )
-
     expect(electronBuilderConfig.publish.releaseType).toBe('draft')
-    expect(cutCheckout.with['fetch-tags']).toBe(true)
-    expect(linuxDraftStep.shell).toBe('bash')
-    expect(linuxDraftStep.run).toContain('assert-github-release-is-draft.mjs')
-    expect(linuxDraftStep.run).toContain('needs.cut.outputs.tag')
-    expect(publishRelease.run).toContain('gh release edit')
-    expect(publishRelease.run).toContain('--draft=false')
-    expect(macSteps.indexOf(abortParentStep)).toBeLessThan(macSteps.indexOf(macPublishStep))
-    expect(abortParentStep.env.PARENT_RUN).toBe('${{ inputs.release_run_id }}')
-    expect(abortParentStep.run).toContain('refusing to publish mac artifacts')
-    expect(macDraftStep.shell).toBe('bash')
-    expect(macDraftStep.run).toContain('assert-github-release-is-draft.mjs')
-    expect(macDraftStep.run).toContain('inputs.tag')
-    expect(macPublishStep.with.command).toContain('-c.publish.releaseType=draft')
-
-    const linuxCommands = releaseWorkflow.jobs.build.strategy.matrix.include
-      .filter((entry) => String(entry.platform).startsWith('linux'))
-      .map((entry) => entry.release_command)
-    expect(linuxCommands.length).toBe(2)
-    for (const command of linuxCommands) {
-      expect(command).toContain('-c.publish.releaseType=draft')
-    }
-
-    const createRestore = releaseWorkflow.jobs['create-release'].steps.find(
-      (step) => step.name === 'Restore draft-release scripts from the workflow ref'
-    )
-    const buildRestore = releaseWorkflow.jobs.build.steps.find(
-      (step) => step.name === 'Restore draft-publish scripts from the workflow ref'
-    )
-    const macRestore = macSteps.find(
-      (step) => step.name === 'Restore draft-publish scripts from the workflow ref'
-    )
-    expect(createRestore.run).toContain('create-draft-release.mjs')
-    expect(buildRestore.run).toContain('assert-github-release-is-draft.mjs')
-    expect(macRestore.run).toContain('assert-github-release-is-draft.mjs')
   })
 })

@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import {
   NODE_RUNTIME_ASSETS,
   NODE_RUNTIME_PIN,
@@ -185,11 +183,5 @@ describe('committed pin', () => {
   it('covers every server target', () => {
     expect(Object.keys(NODE_RUNTIME_ASSETS).sort()).toEqual([...SERVER_TARGETS].sort())
     expect(NODE_RUNTIME_PIN.headers.file).toBe(`node-v${NODE_RUNTIME_PIN.version}-headers.tar.gz`)
-  })
-
-  it('runs in the static analysis job', () => {
-    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const commands = workflow.jobs.preflight.steps.map((step) => step.run ?? '')
-    expect(commands).toContain('pnpm run check:node-runtime-pin')
   })
 })

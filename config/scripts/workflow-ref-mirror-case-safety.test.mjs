@@ -1,61 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 
-const readWorkflow = (relativePath) => parse(readFileSync(join(projectDir, relativePath), 'utf8'))
-
-// Every step that mirrors this repo's whole ref namespace onto a runner disk to
-// prove a commit is reachable from a branch or tag before signing it.
-const REF_MIRRORS = [
-  ['.github/workflows/adhoc-mac-build.yml', 'build-adhoc-mac', 'Vet the requested ref'],
-  ['.github/workflows/dev-channel-win-build.yml', 'build-win', 'Vet the requested inputs']
-]
-
-describe('ref-mirroring vet steps', () => {
-  it.each(['daily', 'hourly', 'adhoc'])('%s builds only need the current commit', (channel) => {
-    const job = readWorkflow(`.github/workflows/${channel}-mac-build.yml`).jobs[
-      `build-${channel}-mac`
-    ]
-    const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v6')
-    expect(checkout.with['fetch-depth']).toBe(1)
-    expect(job.steps.some((step) => step.run?.includes('gh release list'))).toBe(true)
-    expect(
-      job.steps.some((step) => step.run?.includes('ORCA_PUBLISHED_VERSIONS="$published"'))
-    ).toBe(true)
-  })
-
-  // Why matching-refs rather than `gh release list` on the main repo: a tagged
-  // stable still owns its number after its GitHub release is unpublished for a
-  // bug, and that unpublish must not drag the channel backwards.
-  it.each(['daily', 'hourly', 'adhoc'])(
-    '%s versions from git tags, not main GitHub releases',
-    (channel) => {
-      const step = readWorkflow(`.github/workflows/${channel}-mac-build.yml`).jobs[
-        `build-${channel}-mac`
-      ].steps.find((candidate) => candidate.name === `Compute ${channel} version`)
-      expect(step.run).toContain('git/matching-refs/tags/v')
-      expect(step.run).not.toMatch(
-        /gh release list[\s\S]*--repo "\$GITHUB_REPOSITORY"[\s\S]*--json tagName/
-      )
-      if (channel !== 'adhoc') {
-        expect(step.run).toContain('channel_tags=')
-      }
-    }
-  )
-
-  it('retains release-cut history for version reservation and retry ancestry', () => {
-    const checkout = readWorkflow('.github/workflows/release-cut.yml').jobs.cut.steps.find(
-      (step) => step.uses === 'actions/checkout@v6'
-    )
-    expect(checkout.with['fetch-depth']).toBe(0)
-  })
-
+describe('dev build identities in shallow checkouts', () => {
   it('resolves identical dev identities in full and depth-one checkouts without local tags', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-checkout-identity-'))
     const source = join(directory, 'source')
@@ -98,30 +50,4 @@ describe('ref-mirroring vet steps', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
-
-  it('checks out only the vetted commit without remirroring refs', () => {
-    const steps = readWorkflow('.github/workflows/adhoc-mac-build.yml').jobs['build-adhoc-mac']
-      .steps
-    const checkout = steps.find((step) => step.name === 'Checkout the requested ref')
-    expect(checkout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
-    expect(checkout.with['fetch-depth']).toBe(1)
-    expect(checkout.with['persist-credentials']).toBe(false)
-  })
-
-  // Why: macOS and Windows runner disks are case-insensitive, and this repo has
-  // branches that differ only in casing. The files backend cannot store both, and
-  // it fails the whole fetch rather than the one ref — so the vet step dies before
-  // any build runs. reftable keys refs in a table instead of file paths.
-  it.each(REF_MIRRORS)(
-    '%s creates its scratch repo with the reftable backend',
-    (path, job, step) => {
-      const run = readWorkflow(path).jobs[job].steps.find(
-        (candidate) => candidate.name === step
-      ).run
-
-      expect(run).toContain('+refs/heads/*:refs/heads/*')
-      expect(run).toMatch(/git init\b[^\n]*--ref-format=reftable/)
-      expect(run).not.toMatch(/git init -q --bare "\$scratch"/)
-    }
-  )
 })
