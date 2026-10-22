@@ -1,0 +1,52 @@
+name: Sync Orca release
+
+on:
+  schedule:
+    - cron: '23 0 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional stable desktop tag (e.g. v1.4.223); bypasses the 72-hour wait'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: phorca-orca-release-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      github.repository == 'phocassoftware/phorca' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'workflow_dispatch' || vars.ORCA_SYNC_PAUSED != 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - name: Checkout trusted Phorca workflow code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          filter: blob:none
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update the single Orca release PR
+        uses: actions/github-script@v8
+        env:
+          OVERRIDE_TAG: ${{ inputs.tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { join } = require('node:path')
+            const { pathToFileURL } = require('node:url')
+            const { runOrcaReleaseAction } = await import(pathToFileURL(join(
+              process.env.GITHUB_WORKSPACE, 'config/scripts/sync-orca-release-action.mjs'
+            )).href)
+            await runOrcaReleaseAction({ github, context, core, exec })
