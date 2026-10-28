@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { mergeMarkedBlock } from '../../.github/scripts/pr-test-loc-table.mjs'
 import { compareDesktopVersions } from './create-draft-release.mjs'
 import { latestStableDesktopRelease, parseDesktopStableTag } from './latest-stable-release.mjs'
+import { assertOrcaReleaseVersion } from './orca-release-version.mjs'
 
 export const ORCA_SYNC_BRANCH = 'codex/AI-101-orca-release-sync'
 const UPSTREAM = { owner: 'stablyai', repo: 'orca' }
@@ -66,6 +67,7 @@ Phorca's workflow files are retained. Review [Orca's workflow changes](https://g
 One continuing PR keeps upstream updates reviewable without a separate PR for every release.
 Merge with **Create a merge commit** to retain the Orca history needed by later checks.
 Resolve any conflicts on this branch; later updates preserve those commits.
+After resolving the final merge, run \`node config/scripts/check-orca-release-version.mjs ${release.tag_name}\` before building. Keep package.json's version aligned with the imported release.
 
 ## Linked Issue
 
@@ -136,6 +138,11 @@ export async function syncOrcaRelease({
   }
   const ancestor = async (older, newer) =>
     (await runGit(['merge-base', '--is-ancestor', older, newer], [0, 1])).exitCode === 0
+  const checkVersion = async (ref, tag, allowNewer = false) =>
+    assertOrcaReleaseVersion((await runGit(['show', `${ref}:package.json`])).stdout, tag, {
+      source: `${ref}:package.json`,
+      allowNewer
+    })
   const restorePhorcaPolicy = async (source) => {
     await runGit(['rm', '-r', '-f', '--ignore-unmatch', '--', '.github/workflows'])
     if (
@@ -223,6 +230,7 @@ export async function syncOrcaRelease({
       `+refs/tags/${release.tag_name}:${RELEASE_REF}`
     ])
     releaseSha = (await runGit(['rev-parse', `${RELEASE_REF}^{commit}`])).stdout.trim()
+    await checkVersion(releaseSha, release.tag_name)
   }
   const baseRef = `refs/remotes/origin/${base}`
   const alreadyInBase = Boolean(release) && (await ancestor(releaseSha, baseRef))
@@ -240,6 +248,7 @@ export async function syncOrcaRelease({
     return 'No stable desktop Orca release is at least 72 hours old.'
   }
   if (alreadyInBase && !preserveBranch) {
+    await checkVersion(baseRef, release.tag_name, true)
     return `Phorca already includes Orca ${release.tag_name}.`
   }
   if (keepNewerRelease && !preserveBranch) {
@@ -270,7 +279,12 @@ export async function syncOrcaRelease({
       return 'Updates paused to preserve reviewed workflow changes on the update branch. Merge the PR before syncing again.'
     }
   }
-  if (keepNewerRelease) {
+  const useDescribedRelease = keepNewerRelease || !release
+  if (useDescribedRelease) {
+    validateOverrideTag(describedTag)
+    if (!describedTag) {
+      throw new Error('Restore the PR release tag before syncing without a candidate.')
+    }
     // Why: the PR metadata alone cannot prove a force-pushed branch still carries that release.
     await runGit([
       'fetch',
@@ -283,6 +297,7 @@ export async function syncOrcaRelease({
         `The update branch no longer contains the PR's Orca ${describedTag}. Run manually with tag ${describedTag} to restore it.`
       )
     }
+    await checkVersion(`${DESCRIBED_REF}^{commit}`, describedTag)
   }
 
   await runGit(['config', 'user.name', 'github-actions[bot]'])
@@ -314,6 +329,7 @@ export async function syncOrcaRelease({
   if (policyChanges) {
     await runGit(['commit', '-m', 'AI-101 Keep Phorca workflow files during Orca sync'])
   }
+  await checkVersion('HEAD', useDescribedRelease ? describedTag : release.tag_name)
   if (changed || policyChanges) {
     // GITHUB_TOKEN cannot push a tip whose workflow files differ from Phorca's default branch.
     await runGit(['diff', '--quiet', baseRef, 'HEAD', '--', '.github/workflows'])

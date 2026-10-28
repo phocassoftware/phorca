@@ -46,7 +46,50 @@ Run the sync regressions locally before changing the update mechanism:
 
 ```sh
 pnpm test config/scripts/sync-orca-release.test.mjs config/scripts/sync-orca-release-api.test.mjs
+pnpm test config/scripts/sync-orca-release-version.test.mjs
 ```
+
+## Source and installer versions
+
+The automated sync selects published release tags, not Orca `main`. Orca can
+apply `package.json` version bumps on separate release commits, so merging
+`main` alone does not reliably advance Phorca's version.
+
+The [Phorca release repository](https://github.com/phocassoftware/phorca-releases)
+builds one immutable Phorca source SHA using its unchanged `package.json`
+version, then publishes `v<source version>`. It rejects an already published
+version. Correct the version in the source merge, not with a packaging override.
+
+Sync validates the fetched tag's version and the final update branch before
+pushing or updating PR details. This includes reruns, already imported releases,
+and policy refreshes with no eligible candidate. A newer manual selection remains
+the expected version when an older release becomes eligible. An already included
+release on Phorca's default branch requires at least that package version; an
+obsolete version fails instead of reporting success. Mismatches require manual
+resolution; sync never replaces the whole manifest or downgrades a newer version.
+
+After resolving the final merge, fetch the selected upstream tag if needed and
+run this check from the source checkout before building (replace `vX.Y.Z` with
+the selected stable release):
+
+```sh
+node config/scripts/check-orca-release-version.mjs vX.Y.Z
+```
+
+It requires the release commit in `HEAD` and matching versions in the tag and
+working `package.json`. Resolve only the version field to the selected release,
+retaining Phorca's scripts and dependencies. Rerun after any later merge or
+version edit. Record the source SHA, release tag/commit, package version and
+actual validation results in the sync PR; ancestry alone is insufficient.
+
+For a manual delayed-main update, record the UTC cutoff and select the highest
+stable desktop release **published** by that same 72-hour cutoff. Verify its
+source parent is already included and inspect the release commit's diff before
+merging it. If it contains source changes beyond the delayed snapshot, use an
+eligible release whose source is included instead; never label older source with
+a newer release number. Preserve workflows and retired tests using the merge
+procedure in `MERGE-CONFLICTS.md`. A deliberate manual release override can
+bypass the wait, but must still import the selected stable release's source.
 
 ## Enable it
 
@@ -95,7 +138,8 @@ Git hooks, and does not install dependencies or execute upstream code.
 - Use **Run workflow** with an optional stable release tag to bypass the
   72-hour wait. A release older than the PR's selected version is not merged,
   even from a divergent upstream branch. Workflow and retired-test policy can
-  still be refreshed on an existing PR. Releases already in Phorca need no new PR.
+  still be refreshed on an existing PR. Releases already in Phorca need no new PR
+  when the package version also passes validation.
   Always select Phorca's default branch in **Use workflow from**; other branches
   and tags are rejected. The release is chosen with the separate `tag` input.
 - Closing an unmerged sync PR pauses updates until a manual run reopens it.

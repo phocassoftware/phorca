@@ -109,7 +109,15 @@ See [.github/ORCA_SYNC.md](./.github/ORCA_SYNC.md) for the automated sync proced
 
    All must pass; the first must print no paths. Inspect untracked files too.
 
-7. Commit the resolved merge and push fixes to the existing update branch,
+7. Verify the resolved `package.json` version against the selected stable Orca
+   release. Preserve Phorca's other manifest fields; a merge can retain an old
+   version even when the release commit is an ancestor. Commit the resolved merge,
+   then run `node config/scripts/check-orca-release-version.mjs <ORCA_TAG>` before
+   pushing or building. Fetch the selected tag first if it is absent locally.
+   See `.github/ORCA_SYNC.md` for delayed-main updates whose version bump lives
+   only on a release tag. Never relabel source that does not include that release.
+
+8. Push fixes to the existing update branch,
    preserving reviewer commits; do not force-push over them. Report the selected
    Orca commit, retained overrides, checks actually run, and any unavailable
    platform evidence. Leave final PR review and merging to a maintainer, who must
