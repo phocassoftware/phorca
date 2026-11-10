@@ -84,6 +84,12 @@ and [PR creation settings](https://docs.github.com/en/repositories/managing-your
 The sync job executes only the script from Phorca's default branch, disables
 Git hooks, and does not install dependencies or execute upstream code.
 
+The trusted checkout fetches full history and blobs (`fetch-depth: 0`, no blob
+filter). Three-way merges need ancestor and source objects beyond the checked-out
+tree; a partial clone can fail with missing-object errors during sync. Keep this
+full-object checkout when retrying or reproducing sync locally. Actual source
+conflicts still require manual resolution on the update branch.
+
 ## Use it
 
 - **Merge with “Create a merge commit.”** Squash/rebase loses the Orca history
