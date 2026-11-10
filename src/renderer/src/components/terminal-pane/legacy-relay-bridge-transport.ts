@@ -42,6 +42,22 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     viewer = null
   }
 
+  /** Issue order of this pane's attaches, and which one the held viewer came from. */
+  const seqs = { issued: 0, viewer: 0 }
+
+  // The newest issued attach retains its viewer regardless of reply order; release every other viewer.
+  const adoptViewer = (seq: number, acquisitionId: number): void => {
+    if (seq < seqs.viewer) {
+      api?.detach({ ptyId, acquisitionId })
+      return
+    }
+    if (viewer !== null && viewer !== acquisitionId) {
+      api?.detach({ ptyId, acquisitionId: viewer })
+    }
+    viewer = acquisitionId
+    seqs.viewer = seq
+  }
+
   const release = (): void => {
     epoch += 1
     unsubscribe.forEach((dispose) => dispose())
@@ -85,16 +101,17 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     }
     reattaching = true
     const at = epoch
+    const seq = ++seqs.issued
     try {
-      // The screen comes through onReplay in output order: applied from this reply instead, its
-      // clear would erase output the relay printed after it.
+      // Replay in stream order: applying the reply’s screen would erase relay output printed after it.
       const result = await api.attach({ ptyId, replayInStream: true })
       if (!stillWanted(at, result)) {
         return
       }
       if (result.status === 'attached') {
-        viewer = result.acquisitionId
+        adoptViewer(seq, result.acquisitionId)
         clearUnreachable()
+        callbacks?.onConnect?.()
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
         clearUnreachable()
         callbacks?.onExit?.(-1)
@@ -140,8 +157,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         }
         if (!pane) {
           lastState = null
-          // A disconnect hangs the bridge up without an exit, and the next bridge serves only panes
-          // that attach to it. Ask again; it answers exited once the terminal is proven gone.
+          // Reconnect must reattach; a disconnected bridge proves no exit, and its replacement forwards only attached panes.
           dropViewer()
           void reattach()
           return
@@ -168,6 +184,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     mode = 'bridge'
     subscribe()
     const at = epoch
+    const seq = ++seqs.issued
     const result = await api.attach({ ptyId })
     if (!stillWanted(at, result)) {
       return undefined
@@ -184,11 +201,15 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       showUnreachable()
       return { id: ptyId, isReattach: true, replay: '' }
     }
-    viewer = result.acquisitionId
+    adoptViewer(seq, result.acquisitionId)
     return { id: ptyId, isReattach: true, replay: result.replay }
   }
 
   const bridged = (): boolean => mode === 'bridge'
+  const writeBridged = (data: string): boolean => {
+    api?.write({ ptyId, data })
+    return viewer !== null
+  }
   const innerRecoveryState = inner.getRecoveryState?.bind(inner)
   const innerSnapshotOutcome = inner.serializeBufferOutcome?.bind(inner)
 
@@ -215,6 +236,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     getConnectionId: () => (bridged() ? null : inner.getConnectionId?.()),
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
+    reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
     setOutputPaused: (paused) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false
@@ -249,24 +271,12 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }
       inner.disconnect()
     },
-    sendInput: (data, inputKind) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInput(data, inputKind)
-    },
-    sendInputImmediate: (data) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInputImmediate(data)
-    },
+    sendInput: (data, inputKind) =>
+      bridged() ? writeBridged(data) : inner.sendInput(data, inputKind),
+    sendInputImmediate: (data) => (bridged() ? writeBridged(data) : inner.sendInputImmediate(data)),
     sendInputAccepted: async (data, inputKind, options) => {
       if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
+        return writeBridged(data)
       }
       return inner.sendInputAccepted
         ? inner.sendInputAccepted(data, inputKind, options)

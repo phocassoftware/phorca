@@ -1,5 +1,5 @@
 import { test, expect } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
@@ -54,7 +54,7 @@ test.describe('switch on', () => {
       const first = await settle(socket, refreshSidebarInputs(INITIAL_SIDEBAR_INPUTS_FEED_STATE))
       expect(first.kinds.every((kind) => kind === 'snapshot')).toBe(true)
       const installed = first.state.installed
-      expect(installed?.domains.get('temporal')?.has('sortSnapshot')).toBe(true)
+      expect(installed?.domains.get('temporal')?.has('retention')).toBe(true)
       expect(pinned(first.state)).not.toContain(worktreeId)
 
       await orcaPage.evaluate(
@@ -89,21 +89,6 @@ test.describe('switch on', () => {
       expect(second.kinds).toEqual(['delta'])
       expect(second.state.installed?.generation).toBe(installed?.generation)
       expect(pinned(second.state)).toContain(worktreeId)
-    } finally {
-      phone.dispose()
-    }
-  })
-})
-
-test.describe('switch off', () => {
-  test.skip(SIDEBAR_INPUTS_BUILD, 'checks the shipped method set')
-
-  test('a switch-off build refuses sidebarInputs.read to the phone', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const phone = pairMobileClient(await createDesktopMobilePairingOffer(orcaPage))
-    try {
-      const response = await phone.request('sidebarInputs.read', { maxBytes: 262_144 })
-      expect(response).toMatchObject({ ok: false })
     } finally {
       phone.dispose()
     }

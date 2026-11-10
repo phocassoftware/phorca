@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
+import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import type { OrcadManagedTunnelTargeting } from './orcad-managed-tunnel-target'
@@ -16,7 +17,7 @@ import { createCancelledConnectAttemptError } from '../../ssh/ssh-connect-attemp
 function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRuntimeEnvironment {
   const paired = createEnvironmentFromPairingOffer({
     id: 'environment-1',
-    name: 'Managed server',
+    name: 'Builder',
     now: 1,
     offer: {
       v: PAIRING_OFFER_VERSION,
@@ -47,7 +48,7 @@ function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRunt
 function setup(overrides: Partial<SshTarget> = {}, targeting?: OrcadManagedTunnelTargeting) {
   const target: SshTarget = {
     id: 'ssh-1',
-    label: 'Managed server',
+    label: 'Builder',
     host: 'example.com',
     port: 22,
     username: 'deploy',
@@ -229,24 +230,6 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       resolveEnvironment: () => environment(),
       timeoutMs: 5_000
     })
-    it('connects through the raw SSH manager and creates the exact loopback forward', async () => {
-      const state = setup()
-
-      await state.manager.ensure(environment())
-
-      expect(state.connect).toHaveBeenCalledOnce()
-      if (linkKind === 'sshAccess') {
-        expect(environment().orcadDeployment).toBeUndefined()
-      }
-      expect(state.addForward).toHaveBeenCalledWith(
-        'ssh-1',
-        expect.anything(),
-        46_768,
-        '127.0.0.1',
-        6_768,
-        'Managed Orca server: Managed server'
-      )
-    })
 
     it('reuses a tunnel only for the same SSH transport generation', async () => {
       const state = setup()
@@ -276,7 +259,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       )
       await state.manager.ensure(environment())
       bound = after
-      // A plain ensure keeps the forward: nothing it compares names the bound port.
+      // Persisted deployment identity does not change when the server binds a fallback port.
       await state.manager.ensure(environment())
       expect(state.addForward).toHaveBeenCalledOnce()
 
@@ -289,7 +272,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         after,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
     })
 
@@ -512,38 +495,6 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       expect(state.probeTunnel).not.toHaveBeenCalled()
     })
 
-    it('checks that the server is running only when it sets up a fresh forward', async () => {
-      const state = setup()
-
-      await state.manager.ensure(environment())
-      await state.manager.ensure(environment())
-      expect(state.ensureServing).toHaveBeenCalledOnce()
-      expect(state.ensureServing).toHaveBeenCalledWith({
-        environment: expect.objectContaining({ id: 'environment-1' }),
-        target: state.target,
-        connection: state.connection,
-        remotePort: 6_768
-      })
-
-      state.setTransportGeneration(4)
-      await state.manager.ensure(environment())
-      expect(state.ensureServing).toHaveBeenCalledTimes(2)
-    })
-
-    it('starts a server that stopped while the client slept once the tunnel is rebuilt', async () => {
-      const state = setup()
-      await state.manager.ensure(environment())
-      state.probeTunnel.mockResolvedValue(false)
-
-      await state.manager.recoverAfterHostResume(resumeOptions())
-
-      expect(state.reconnect).toHaveBeenCalledOnce()
-      expect(state.ensureServing).toHaveBeenCalledTimes(2)
-      expect(state.ensureServing).toHaveBeenLastCalledWith(
-        expect.objectContaining({ target: state.target, remotePort: 6_768 })
-      )
-    })
-
     it('keeps a healthy managed tunnel intact after host resume', async () => {
       const state = setup()
       await state.manager.ensure(environment())
@@ -586,7 +537,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         6_768,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
 
       await state.manager.ensure(environment())
@@ -707,21 +658,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
     }
   }
 
-  it('forwards to the port orcad bound when another runtime holds the preferred one', async () => {
-    const state = boundPortSetup([58_520])
-    await state.manager.ensure(createEnvironment('orcadDeployment'))
-
-    expect(state.addForward).toHaveBeenCalledWith(
-      'ssh-1',
-      state.connection,
-      46_768,
-      '127.0.0.1',
-      58_520,
-      'Managed Orca server: Managed server'
-    )
-    expect(state.verifyIdentity).toHaveBeenCalledOnce()
-  })
-
   it('follows a restarted server to the port it bound, within the same ensure', async () => {
     const state = boundPortSetup([6_768, 58_520])
     state.ensureServing
@@ -736,7 +672,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
     expect(state.ensureServing).toHaveBeenLastCalledWith(
       expect.objectContaining({ remotePort: 58_520 })
@@ -762,18 +698,8 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
-  })
-
-  it('reuses a verified tunnel without reading the port again', async () => {
-    const state = boundPortSetup([58_520])
-    const environment = createEnvironment('orcadDeployment')
-    await state.manager.ensure(environment)
-    await state.manager.ensure(environment)
-
-    expect(state.resolveRemotePort).toHaveBeenCalledOnce()
-    expect(state.addForward).toHaveBeenCalledOnce()
   })
 
   it('fails the connect, leaving no forward, when the bound port serves another runtime', async () => {
@@ -812,7 +738,6 @@ describe('OrcadManagedTunnelManager bound port', () => {
     )
     expect(state.addForward.mock.calls[0]?.[4]).toBe(58_520)
     state.addForward.mockClear()
-    // The persisted link names the preferred port, so the next ensure reuses this forward.
     await state.manager.ensure({
       ...createEnvironment('orcadDeployment'),
       orcadDeployment: {

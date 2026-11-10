@@ -1,10 +1,16 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
+import {
+  CLOSE_TERMINAL_PANE_EVENT,
+  SET_TERMINAL_PANE_TITLE_EVENT,
+  type CloseTerminalPaneDetail,
+  type SetTerminalPaneTitleDetail
+} from '@/constants/terminal'
+import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-terminal-actions'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   splitPaneWithOneShotStartup,
   recordRuntimeCreatedTerminalPaneSplit
@@ -23,6 +29,7 @@ export function installTerminalPaneMountEvents(args: {
     worktreeId: string
     isActive: boolean
     managerRef: React.RefObject<PaneManager | null>
+    showPaneTitle: (paneId: number, title: string | null) => void
     persistLayoutSnapshot: () => void
     syncCanExpandState: () => void
     queueResizeAll: (focusActive: boolean) => void
@@ -87,7 +94,8 @@ export function installTerminalPaneMountEvents(args: {
       manager: mgr,
       getPtyIdForLeaf: (leafId) =>
         useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.ptyIdsByLeafId?.[leafId],
-      closeTab: () => closeTerminalTab(deps.tabId, { skipRunningProcessConfirm: true }),
+      closeTab: (reason) =>
+        closeTerminalTab(deps.tabId, { reason, skipRunningProcessConfirm: true }),
       closeTabPreservingPty: () => {
         const store = useAppStore.getState()
         if (detail.retireSurface && detail.leafId) {
@@ -110,8 +118,24 @@ export function installTerminalPaneMountEvents(args: {
     deps.persistLayoutSnapshot()
   }
 
+  const onSetPaneTitle = (event: Event): void => {
+    if (!(event instanceof CustomEvent)) {
+      return
+    }
+    const detail: SetTerminalPaneTitleDetail | null = event.detail
+    if (!detail || detail.tabId !== deps.tabId) {
+      return
+    }
+    const resolution = resolveLeafIdForManager(deps.tabId, detail.leafId, deps.managerRef.current)
+    if (resolution.status === 'resolved') {
+      deps.showPaneTitle(resolution.numericPaneId, detail.title)
+    }
+  }
+
+  window.addEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   return () => {
+    window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   }

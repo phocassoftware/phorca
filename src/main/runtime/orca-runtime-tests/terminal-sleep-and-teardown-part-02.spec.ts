@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
-import { refusedMobileSessionTabClose } from '../mobile-session-tab-close-outcome'
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import { refusedMobileSessionTabClose } from '../session-lifecycle/close/mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -16,7 +16,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not stop a provider-owned foreign PTY referenced by stale target state', async () => {
@@ -251,10 +251,12 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'started', ptyIds: ['pty-before-sleep'] })
     ])
     let spawnLeaseAcquired = false
-    const spawnLease = runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID).then((release) => {
-      spawnLeaseAcquired = true
-      return release
-    })
+    const spawnLease = runtime
+      .acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null))
+      .then((release) => {
+        spawnLeaseAcquired = true
+        return release
+      })
     await Promise.resolve()
     expect(spawnLeaseAcquired).toBe(false)
 
@@ -281,7 +283,9 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses
     })
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
 
     const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await Promise.resolve()
@@ -305,7 +309,9 @@ describe('OrcaRuntimeService', () => {
         getForegroundProcess: async () => null,
         listProcesses
       })
-      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
 
       const sleep = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
       const rejection = expect(sleep).rejects.toThrow('terminal_worktree_sleep_timeout')
@@ -316,7 +322,9 @@ describe('OrcaRuntimeService', () => {
 
       expect(listProcesses).not.toHaveBeenCalled()
       expect(stopAndWait).not.toHaveBeenCalled()
-      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+      const releaseNextSpawn = await runtime.acquireWorktreeTerminalSpawn(
+        spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+      )
       releaseNextSpawn()
     } finally {
       vi.useRealTimers()
@@ -326,9 +334,7 @@ describe('OrcaRuntimeService', () => {
   it('releases the worktree terminal mutation when a wake client-event listener throws', async () => {
     const runtime = new OrcaRuntimeService(store)
     const secondListenerEvents: RuntimeClientEvent[] = []
-    // Why: a broken paired-client relay can throw synchronously while delivering the wake
-    // notification. That must not abort the wake or (regression) leak the per-worktree terminal
-    // mutation acquired in acquireWorktreeTerminalSpawn, or every later sleep wedges for 12s.
+    // A throwing wake subscriber must not leak the spawn mutation and wedge later sleep for 12s.
     runtime.onClientEvent((event) => {
       if (event.type === 'worktreeTerminalSleepState' && event.phase === 'woken') {
         throw new Error('relay_send_failed')
@@ -347,22 +353,19 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => processLists.shift() ?? []
     })
 
-    // Sleep leaves the worktree in a 'sleeping' state so the next spawn emits the 'woken' event.
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
 
-    // The wake acquires the mutation and emits 'woken'; a throwing subscriber must not surface.
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
-    // Isolation: the second subscriber still received the 'woken' event.
     expect(
       secondListenerEvents.some(
         (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'woken'
       )
     ).toBe(true)
 
-    // Regression: the mutation was released, so a subsequent sleep converges instead of throwing
-    // terminal_worktree_sleep_timeout.
     await expect(
       runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     ).resolves.toMatchObject({ postStopVerified: true })
@@ -371,8 +374,7 @@ describe('OrcaRuntimeService', () => {
   it('isolates a throwing subscriber across runtime listener fan-out', () => {
     const runtime = new OrcaRuntimeService(store)
     const delivered: number[] = []
-    // Why: the shared notifyRuntimeListeners guard must let sibling fan-outs (here mobile
-    // notifications) survive a throwing subscriber, not just the client-event path.
+    // Sibling notification fan-outs must also isolate throwing subscribers.
     runtime.onNotificationDispatched(() => {
       throw new Error('subscriber_send_failed')
     })
@@ -390,7 +392,6 @@ describe('OrcaRuntimeService', () => {
       })
     ).not.toThrow()
 
-    // The second subscriber still received the event despite the first throwing.
     expect(delivered).toHaveLength(1)
   })
 
@@ -419,7 +420,9 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ phase: 'committed', ptyIds: ['pty-preserved-history'] })
     ])
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const releaseSpawn = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     releaseSpawn()
 
     const sleepEvents = events.filter((event) => event.type === 'worktreeTerminalSleepState')
@@ -555,10 +558,7 @@ describe('OrcaRuntimeService', () => {
   it('reports recoverable post-stop liveness failure after exact terminal stop', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const processLists = [
-      [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }],
-      new Error('daemon unavailable')
-    ]
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }]]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -568,12 +568,13 @@ describe('OrcaRuntimeService', () => {
         return true
       },
       getForegroundProcess: async () => null,
+      // Why: the daemon stays unavailable through every bounded post-stop retry.
       listProcesses: async () => {
         const next = processLists.shift()
-        if (next instanceof Error) {
-          throw next
+        if (!next) {
+          throw new Error('daemon unavailable')
         }
-        return next ?? []
+        return next
       }
     })
 
@@ -625,7 +626,6 @@ describe('OrcaRuntimeService', () => {
       refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
     )
 
-    // Why: this message is what the Sleep-workspace toast and `orca terminal close --all` print.
     await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
       'A replacement terminal took this tab over while it was closing, so the tab was kept open. Try again.'
     )

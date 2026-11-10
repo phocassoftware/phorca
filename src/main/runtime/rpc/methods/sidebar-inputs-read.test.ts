@@ -62,6 +62,11 @@ describe('sidebarInputs.read', () => {
     for (const context of [
       { clientKind: 'mobile', connectionId: 'conn-1', pairedDeviceParentId: 'desktop-device' },
       { clientKind: 'runtime', connectionId: 'conn-1' },
+      {
+        clientKind: 'runtime',
+        connectionId: 'conn-1',
+        caller: { kind: 'paired-device', deviceId: 'desktop-device' }
+      },
       { clientKind: 'mobile' }
     ] satisfies RpcDispatchStreamingOptions[]) {
       expect(await host.read(context)).toMatchObject({ ok: false, error: { code: 'forbidden' } })

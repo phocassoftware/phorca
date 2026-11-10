@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   addGitLabIssueCommentMock,
   addGitLabMRCommentMock,
   addGitLabMRInlineCommentMock,
@@ -23,8 +24,8 @@ import {
   updateGitLabIssueMock,
   updateGitLabMRMock,
   updateGitLabMRReviewersMock
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('passes SSH connection ids through GitLab task operations', async () => {
@@ -244,7 +245,20 @@ describe('OrcaRuntimeService', () => {
       'mr',
       'origin',
       'ssh-1',
-      undefined
+      undefined,
+      {},
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      '/remote/repo',
+      8,
+      'mr',
+      'origin',
+      'ssh-1',
+      undefined,
+      {},
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -440,7 +454,19 @@ describe('OrcaRuntimeService', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      TEST_REPO_PATH,
+      8,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions,
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

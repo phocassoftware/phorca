@@ -5,19 +5,20 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissal
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { withCleanupVisitEvidence } from '../../../../shared/workspace-last-active'
 import {
   probeTerminalLiveness,
   shouldPreserveCleanupInspection
 } from './workspace-cleanup-local-evidence'
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
-import { selectRetainedAgentEntriesForWorktree } from '@/components/sidebar/worktree-agent-row-selectors'
+import { selectRetainedAgentEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 
 export type WorkspaceCleanupEnrichOptions = {
   applyDismissals?: boolean
@@ -240,8 +241,9 @@ async function enrichWorkspaceCleanupCandidate(
     blockers.push('recent-visible-context')
   }
 
+  // Why the client: visits live here, and a remote host's scan never sees them.
   const enriched = applyWorkspaceCleanupPolicy({
-    ...candidate,
+    ...withCleanupVisitEvidence(candidate, lastVisitedAt, Date.now()),
     blockers: [...new Set(blockers)],
     localContext: {
       ...candidate.localContext,
@@ -257,21 +259,23 @@ async function enrichWorkspaceCleanupCandidate(
     : applyWorkspaceCleanupDismissal(enriched, state.workspaceCleanupDismissals)
 }
 
+/** Adds or drops the `dismissed` blocker so it matches `dismissals`. */
 export function applyWorkspaceCleanupDismissal(
   candidate: WorkspaceCleanupCandidate,
   dismissals: Record<string, WorkspaceCleanupDismissal>
 ): WorkspaceCleanupCandidate {
-  if (
-    !shouldHideWorkspaceCleanupCandidate(
-      candidate,
-      getWorkspaceCleanupDismissal(candidate, dismissals)
-    )
-  ) {
+  const dismissed = shouldHideWorkspaceCleanupCandidate(
+    candidate,
+    getWorkspaceCleanupDismissal(candidate, dismissals)
+  )
+  if (dismissed === candidate.blockers.includes('dismissed')) {
     return candidate
   }
   return applyWorkspaceCleanupPolicy({
     ...candidate,
-    blockers: [...new Set<WorkspaceCleanupBlocker>([...candidate.blockers, 'dismissed'])]
+    blockers: dismissed
+      ? [...candidate.blockers, 'dismissed']
+      : candidate.blockers.filter((blocker) => blocker !== 'dismissed')
   })
 }
 

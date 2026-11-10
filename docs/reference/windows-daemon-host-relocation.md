@@ -3,7 +3,7 @@
 On Windows the terminal daemon does not run from the install directory. Before it forks the
 daemon, the app materializes a trimmed copy of its own runtime under
 `%LOCALAPPDATA%\<executable basename>\daemon-host-profiles\<profile key>\<app version>\` and forks the daemon from there
-(`src/main/daemon/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
+(`src/main/daemon/executable-host/windows/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
 auto-update and across a crash of the main process.
 
 The executable basename scopes rebranded builds away from one another; the profile key keeps
@@ -107,7 +107,7 @@ stop being scored.
 
 ## Verifying a change
 
-Unit coverage lives in `src/main/daemon/daemon-host-relocation.test.ts` (copy plan, verbatim
+Unit coverage lives in `src/main/daemon/executable-host/windows/testing/daemon-host-relocation.test.ts` (copy plan, verbatim
 naming, marker/atomic publish, fail-open, prune veto). Nothing in unit tests can prove survival, so
 any change to this file or to the NSIS macro needs the packaged harnesses:
 
@@ -118,6 +118,7 @@ any change to this file or to the NSIS macro needs the packaged harnesses:
 - `.github/workflows/win-update-e2e.yml` — release-tag-to-release-tag update, both `survival` and
   `cold-restore` profiles.
 
-All four are `workflow_dispatch`-only (the two update workflows also carry a push trigger pinned to
-one historical feature branch), so they must be dispatched by hand against this branch before
-merging a change here — which requires the workflow files to already exist on `main`.
+Those upstream workflows are not installed in Phorca; its workflow tree retains
+only source sync. Run the maintained harnesses under `tests/tools/` in isolated
+CI and attach their evidence, or record the missing packaged-platform evidence.
+Do not restore or enable unrelated workflows as part of a source sync.

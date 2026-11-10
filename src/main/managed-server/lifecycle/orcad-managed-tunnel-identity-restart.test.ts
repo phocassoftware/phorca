@@ -1,31 +1,66 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import {
+  encodePairingOffer,
+  parsePairingCode
+} from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   markEnvironmentUsed
-} from '../../../shared/runtime-environment-store'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import { verifyManagedOrcadTunnelIdentity } from './orcad-managed-tunnel-identity'
+import {
+  type KnownRuntimeEnvironment,
+  getPreferredPairingOffer
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import {
+  addWslHostEnvironment,
+  refreshWslHostPairing
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
+import { WslOrcadConnectionManager } from '../../wsl/orcad/wsl-orcad-connection'
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const servers: OrcaRuntimeRpcServer[] = []
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()))
 })
 
-/** An orcad process on `userDataPath`, the host profile that holds its E2EE key and devices. */
 async function startOrcad(userDataPath: string): Promise<OrcaRuntimeRpcServer> {
   const server = new OrcaRuntimeRpcServer({
     runtime: new OrcaRuntimeService(),
@@ -75,7 +110,6 @@ function managedEnvironment(pairing: PairingOffer, runtimeId: string): KnownRunt
   }
 }
 
-/** The restarted process listens on a new port; the tunnel's local endpoint reaches it. */
 function reachedThrough(pairing: PairingOffer, server: OrcaRuntimeRpcServer): PairingOffer {
   const port = new URL(pairingOffer(server).endpoint).port
   const endpoint = new URL(pairing.endpoint)
@@ -84,6 +118,84 @@ function reachedThrough(pairing: PairingOffer, server: OrcaRuntimeRpcServer): Pa
 }
 
 describe('reopening a managed tunnel after orcad restarted elsewhere', () => {
+  it('keeps the WSL caller across host and desktop restarts, until explicit re-pairing', async () => {
+    const hostProfile = mkdtempSync(join(tmpdir(), 'orcad-wsl-host-'))
+    const desktopProfile = mkdtempSync(join(tmpdir(), 'orcad-wsl-client-'))
+    let server = await startOrcad(hostProfile)
+    const connect = async () => {
+      const manager = new WslOrcadConnectionManager({
+        getPairingOffer: () => {
+          const [saved] = listEnvironments(desktopProfile)
+          return saved ? getPreferredPairingOffer(saved) : null
+        },
+        deployAndLaunch: async () => ({
+          outcome: 'ready',
+          distro: 'Ubuntu',
+          distroId: null,
+          fullVersion: '1',
+          pid: null,
+          holder: 'adopted',
+          port: Number(new URL(server.getWebSocketEndpoint()!).port),
+          readiness: {
+            runtimeId: server['runtime'].getRuntimeId(),
+            managedWslCliReconciliation: 'settled',
+            ...(await buildServePairingReadiness({ pairingAddress: '127.0.0.1' }, server))
+          }
+        }),
+        listen: async (_transport, { remotePort }) => ({
+          entry: {
+            id: 'bridge',
+            connectionId: 'wsl:ubuntu',
+            localPort: remotePort,
+            remoteHost: '127.0.0.1',
+            remotePort
+          },
+          close: async () => {},
+          dispose: () => {}
+        })
+      })
+      const dispatch = vi.spyOn(server['dispatcher'], 'dispatchStreaming')
+      try {
+        const connection = await manager.ensure('Ubuntu')
+        return {
+          connection,
+          caller: dispatch.mock.calls.at(-1)?.[2]?.authenticatedCallerFingerprint
+        }
+      } finally {
+        dispatch.mockRestore()
+        await manager.dispose()
+      }
+    }
+    const first = await connect()
+    expect(first.caller).toBeTruthy()
+    addWslHostEnvironment(desktopProfile, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu',
+      pairingCode: first.connection.pairingOffer,
+      record: {
+        kind: 'wsl',
+        distro: 'Ubuntu',
+        localPort: first.connection.localPort,
+        remotePort: first.connection.remotePort
+      }
+    })
+    await server.stop()
+    server = await startOrcad(hostProfile)
+    const restarted = await connect()
+    expect(restarted.caller).toBe(first.caller)
+    const paired = parsePairingCode(first.connection.pairingOffer)!
+    server.getDeviceRegistry()!.removeDevice(paired.pairedDeviceId!)
+    await expect(connect()).rejects.toThrow('orcad_pairing_rejected')
+    refreshWslHostPairing(desktopProfile, 'wsl:ubuntu', {
+      pairingCode: encodePairingOffer(pairingOffer(server)),
+      localPort: restarted.connection.localPort,
+      remotePort: restarted.connection.remotePort
+    })
+    const rePaired = await connect()
+    expect(rePaired.caller).toBeTruthy()
+    expect(rePaired.caller).not.toBe(first.caller)
+  })
+
   it('accepts the same host under a new runtime id, and its status recovers', async () => {
     const hostProfile = mkdtempSync(join(tmpdir(), 'orcad-host-'))
     const first = await startOrcad(hostProfile)
@@ -95,14 +207,13 @@ describe('reopening a managed tunnel after orcad restarted elsewhere', () => {
     ).verifiedRuntimeId
     await first.stop()
 
-    // Another desktop updated or woke the host while this one was away.
     const restarted = await startOrcad(hostProfile)
     const pairing = reachedThrough(paired, restarted)
 
     await expect(
       verifyManagedOrcadTunnelIdentity(managedEnvironment(pairing, recorded))
     ).resolves.toEqual({ verdict: 'verified' })
-    // The first authenticated status reply over the reopened tunnel records the new id.
+    // Authenticated status records the restarted process's new runtime ID.
     const status = await verifyRuntimePairingIdentity(pairedRuntimeConnectionFromOffer(pairing), {
       runtimeId: null
     })

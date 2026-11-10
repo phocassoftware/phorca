@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneAdmissionOutcome } from '../persistence/terminal-topology/terminal-pane-admission'
-import { startInAdmittedPane } from './runtime-pane-admission'
+import { startInAdmittedPane } from './terminal/launch/runtime-pane-admission'
 import type { RuntimeStore } from './runtime-store-contract'
 
 const SPLIT = {
@@ -49,6 +49,7 @@ describe('startInAdmittedPane', () => {
     ).rejects.toThrow('mount timed out')
     expect(store.withdrawTerminalPane).toHaveBeenCalledWith(
       { type: 'closePane', workspace: 'wt-1', tabId: 'tab-1', leafId: 'leaf-new' },
+      undefined,
       undefined
     )
   })
