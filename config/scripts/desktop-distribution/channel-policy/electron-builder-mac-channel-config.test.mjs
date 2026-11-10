@@ -25,7 +25,7 @@ function withEnv(env, assert) {
     }
     Object.assign(process.env, env)
     delete require.cache[configPath]
-    assert(require('../electron-builder.config.cjs'))
+    assert(require(configPath))
   } finally {
     for (const [key, value] of Object.entries(original)) {
       if (value === undefined) {
@@ -35,7 +35,7 @@ function withEnv(env, assert) {
       }
     }
     delete require.cache[configPath]
-    require('../electron-builder.config.cjs')
+    require(configPath)
   }
 }
 

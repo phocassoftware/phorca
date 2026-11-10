@@ -288,7 +288,6 @@ and behavioral tests. Preserve its `.oxlintrc.json` exclusion and the
 `phorca-plugins/` boundary in the changed-code quality classifier; the plugin owns
 its build and tests. Run `npm test` from that plugin directory when verifying it.
 
-
 ## Verification before accepting a merge
 
 - Run from the repository root with the existing dependency/install policy.
