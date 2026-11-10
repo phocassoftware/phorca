@@ -1,5 +1,7 @@
 // CI release builds substitute telemetry credentials; contributor builds use null and console-mirror only.
 // No runtime env fallback: shell exports must not enable telemetry transmission.
+declare const PHORCA_MANAGED_BUILD: boolean
+
 declare const ORCA_BUILD_IDENTITY: 'stable' | 'rc' | null
 declare const ORCA_POSTHOG_WRITE_KEY: string | null
 

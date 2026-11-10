@@ -15,6 +15,13 @@ const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.productName).toBe('Phorca')
+    expect(electronBuilderConfig.appId).toBe(
+      require('../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -422,8 +429,10 @@ describe('arch-aware packaging guard', () => {
   const HOST_ARCH = process.arch === 'arm64' ? 3 : 1
   const OTHER_ARCH = process.arch === 'arm64' ? 1 : 3
   const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
-  const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
-  const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
+  const otherSherpa =
+    process.platform === 'win32'
+      ? 'sherpa-onnx-win-x64'
+      : `sherpa-onnx-${process.platform}-${OTHER_ARCH_NAME}`
 
   // Native tests need valid mobile bundle for beforePack; use temp build, leaving bundle verification to its own suite.
   let scratch

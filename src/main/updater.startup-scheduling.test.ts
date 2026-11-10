@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { updaterMainWindow } from './updater-test-main-window'
+import { UpdaterSetup } from './updater/updater-setup'
 
 const {
   appMock,
@@ -45,6 +46,24 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps explicit remote update support without starting desktop polling', async () => {
+    const mainWindow = updaterMainWindow(vi.fn())
+    const updater = new UpdaterSetup()
+
+    updater.setupAutoUpdater(mainWindow, undefined, true)
+
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.on).toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(fetchNudgeMock).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
+    expect(updater.getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'interactive',
+      automatic: true,
+      reason: 'available'
+    })
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {

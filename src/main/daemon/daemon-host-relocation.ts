@@ -65,9 +65,6 @@ function currentBuildFingerprint(
   return observed?.entrySourcePath === sources.entrySourcePath ? observed.fingerprint : null
 }
 
-// Keep runtimes out of roaming storage; match the NSIS uninstall root in config/nsis/orca-installer-hooks.nsh.
-const LOCAL_HOST_ROOT_NAME = 'Orca'
-
 // Match getDaemonEntryPath() so relocation copies the same entry the install runtime would fork.
 function resolveEntrySourcePath(resourcesPath: string, observedEntryPath?: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
@@ -137,7 +134,7 @@ export function getDaemonHostRootDir(): string {
   if (typeof localAppData === 'string' && localAppData.length > 0) {
     return join(
       localAppData,
-      LOCAL_HOST_ROOT_NAME,
+      winPath.parse(process.execPath).name,
       PROFILE_HOST_SUBDIR,
       userDataProfileKey(userDataPath)
     )

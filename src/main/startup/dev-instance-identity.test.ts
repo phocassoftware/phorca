@@ -4,12 +4,12 @@ import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instan
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
     expect(getDevInstanceIdentity(false, {})).toMatchObject({
-      name: 'Orca',
-      appName: 'Orca',
+      name: 'Phorca',
+      appName: 'Phorca',
       isDev: false,
       devLabel: null,
       dockBadgeLabel: null,
-      appUserModelId: 'com.stablyai.orca'
+      appUserModelId: 'com.phocassoftware.phorca'
     })
   })
 
@@ -18,9 +18,9 @@ describe('dev-instance-identity', () => {
     const b = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/b' })
 
     expect(a.name).not.toBe(b.name)
-    expect(a.appName).toBe('Orca Dev')
-    expect(b.appName).toBe('Orca Dev')
-    expect(a.appName).not.toBe('Orca')
+    expect(a.appName).toBe('Phorca Dev')
+    expect(b.appName).toBe('Phorca Dev')
+    expect(a.appName).not.toBe('Phorca')
   })
 
   it('never renames a packaged build before ready', () => {
@@ -47,9 +47,9 @@ describe('dev-instance-identity', () => {
       devWorktreeName: 'dev-indicator',
       devRepoRoot: '/repo/worktrees/dev-indicator'
     })
-    expect(identity.name).toBe('Orca: nwparker/dev-indicator')
+    expect(identity.name).toBe('Phorca: nwparker/dev-indicator')
     expect(identity.dockBadgeLabel).toBeNull()
-    expect(identity.appUserModelId).toMatch(/^com\.stablyai\.orca\.dev\.[a-f0-9]{10}$/)
+    expect(identity.appUserModelId).toMatch(/^com\.phocassoftware\.phorca\.dev\.[a-f0-9]{10}$/)
   })
 
   it('includes the branch when it differs from the worktree basename', () => {
@@ -60,7 +60,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('payment-ui @ feature/billing-shell')
-    expect(identity.name).toBe('Orca: feature/billing-shell')
+    expect(identity.name).toBe('Phorca: feature/billing-shell')
     expect(identity.dockBadgeLabel).toBeNull()
   })
 
@@ -72,7 +72,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('manual label')
-    expect(identity.name).toBe('Orca: feature/other')
+    expect(identity.name).toBe('Phorca: feature/other')
     expect(identity.dockBadgeLabel).toBeNull()
   })
 })

@@ -1,3 +1,5 @@
+Before resolving merge conflicts with upstream Orca, read and follow [MERGE-CONFLICTS.md](./MERGE-CONFLICTS.md).
+
 # Useful Commands
 
 - **Before handoff**: `pnpm check:changed --maxWorkers=2` (format, lint, typecheck, affected tests, ratchets; cached when nothing changed)

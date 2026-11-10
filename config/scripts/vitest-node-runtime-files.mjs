@@ -8,7 +8,6 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
-  'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',

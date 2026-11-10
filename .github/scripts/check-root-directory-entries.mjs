@@ -3,15 +3,29 @@ import { randomUUID } from 'node:crypto'
 
 function readRootEntries(sha) {
   // Git paths are arbitrary bytes; latin1 round-trips them while utf8 merges invalid sequences into U+FFFD, hiding distinct entries.
-  const stdout = execFileSync('git', ['ls-tree', '-z', '--name-only', sha], {
+  const stdout = execFileSync('git', ['ls-tree', '-z', sha], {
     encoding: 'latin1',
     stdio: ['ignore', 'pipe', 'inherit']
   })
-  return stdout.split('\0').filter(Boolean)
+  return new Map(
+    stdout
+      .split('\0')
+      .filter(Boolean)
+      .map((entry) => {
+        const separator = entry.indexOf('\t')
+        return [entry.slice(separator + 1), entry.slice(0, separator).split(' ')[1]]
+      })
+  )
 }
 
 // These reviewed additions stay listed until the base tree carries them.
-const REVIEWED_ROOT_ENTRIES = new Set(['.claude', '.mcp.json', 'cloud', 'opencode.json'])
+const REVIEWED_ROOT_ENTRIES = new Map([
+  ['.claude', 'tree'],
+  ['.mcp.json', 'blob'],
+  ['cloud', 'tree'],
+  ['opencode.json', 'blob'],
+  ['MERGE-CONFLICTS.md', 'blob']
+])
 
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {
@@ -20,10 +34,10 @@ function checkRootDirectoryEntries(argv) {
   }
 
   const [baseSha, headSha] = argv
-  const baseEntries = new Set(readRootEntries(baseSha))
-  const blockedEntries = readRootEntries(headSha).filter(
-    (entry) => !baseEntries.has(entry) && !REVIEWED_ROOT_ENTRIES.has(entry)
-  )
+  const baseEntries = readRootEntries(baseSha)
+  const blockedEntries = [...readRootEntries(headSha)]
+    .filter(([name, type]) => !baseEntries.has(name) && REVIEWED_ROOT_ENTRIES.get(name) !== type)
+    .map(([name]) => name)
 
   if (blockedEntries.length === 0) {
     console.log('Root directory guard passed: no new root-level files or folders.')
