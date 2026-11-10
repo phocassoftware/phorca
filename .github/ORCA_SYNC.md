@@ -25,12 +25,12 @@ deletions. It also keeps the exact test paths in
 resolving upstream modify/delete conflicts on those paths before checking for
 other conflicts. Direct upstream merges do not have either protection.
 
-The retirement list covers selected `config/scripts/*.test.mjs` suites, not the
-whole directory or every test matching that suffix. Additions to upstream tests
-are not automatically excluded. Keep every listed file deleted on Phorca's
-default branch; retire another test by deleting it and adding its exact path
-through review. To restore one, remove its entry and restore the test through
-review.
+The retirement list covers selected `config/scripts/` test suites at exact paths,
+including their recorded upstream relocations, not whole directories or every
+test with the same suffix. Unrelated upstream additions are not automatically
+excluded. Keep every listed file deleted on Phorca's default branch; retire
+another test by deleting it and adding its exact path through review. To restore
+one, remove its entry and restore the test through review.
 
 This workflow opens or updates a source-sync PR. It does not publish Phorca
 builds or run PR, build, deployment or security-check workflows. Retiring mixed

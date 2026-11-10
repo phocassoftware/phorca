@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  LOC_BLOCK_END,
+  LOC_BLOCK_START,
+  emptyLocTotals,
+  mergeLocBlock
+} from '../../.github/scripts/pr-test-loc-table.mjs'
 import { syncOrcaRelease } from './sync-orca-release.mjs'
 
 describe('Orca sync API safeguards', () => {
@@ -62,4 +68,33 @@ describe('Orca sync API safeguards', () => {
       expect(github.rest.pulls.update).not.toHaveBeenCalled()
     }
   )
+})
+
+describe('shared PR generated blocks', () => {
+  it('keeps reviewer text and an orphan end marker while moving the LoC block after ELI5', () => {
+    const body = [
+      'Reviewer note',
+      LOC_BLOCK_END,
+      '',
+      '## ELI5',
+      'Keep this explanation.',
+      '',
+      LOC_BLOCK_START,
+      'Old totals',
+      LOC_BLOCK_END,
+      '',
+      '## Testing',
+      'Keep these results.'
+    ].join('\n')
+
+    const updated = mergeLocBlock(body, emptyLocTotals())
+
+    expect(
+      updated.startsWith(`Reviewer note\n${LOC_BLOCK_END}\n\n## ELI5\nKeep this explanation.`)
+    ).toBe(true)
+    expect(updated.split(LOC_BLOCK_START)).toHaveLength(2)
+    expect(updated).not.toContain('Old totals')
+    expect(updated).toContain('## Testing\nKeep these results.')
+    expect(updated.indexOf(LOC_BLOCK_START)).toBeLessThan(updated.indexOf('## Testing'))
+  })
 })

@@ -8,6 +8,8 @@ fixes, features, and structure, then reapply the smallest changes needed for:
    binaries over the fork.
 2. **Phorca CI and release operations:** retain the release-sync machinery and the
    minimal configuration needed for Phorca's required checks to pass.
+3. **Reviewed Phorca plugins:** retain `phorca-plugins/` and the standalone-package
+   quality-check boundary, including PR Guide's configured session-model behavior.
 
 The file map below records those contracts, not permission to preserve every old
 implementation. If upstream now provides an equivalent implementation, use it and
@@ -142,9 +144,9 @@ paths are a starting map, not a fixed allowlist.
   globally replace `Orca`, `orca`, or `stablyai`.
 
 Companion tests:
-`config/scripts/electron-builder-config.test.mjs`,
-`config/scripts/electron-builder-mac-channel-config.test.mjs`,
-`config/scripts/mac-build-compatibility.test.mjs`,
+`config/scripts/desktop-distribution/runtime-verification/electron-builder-config.test.mjs`,
+`config/scripts/desktop-distribution/channel-policy/electron-builder-mac-channel-config.test.mjs`,
+`config/scripts/desktop-distribution/macos/mac-build-compatibility.test.mjs`,
 `src/shared/local-build-compatibility.test.ts`,
 `src/main/local-builds/local-build-candidate.test.ts`, and
 `src/main/local-builds/local-build-compatibility-contract.test.ts`.
@@ -162,14 +164,14 @@ incompatible with the fork's local-build contract.
   fail on missing/invalid metadata rather than falling back to a hardcoded
   `Orca.exe` or `Phorca.exe`. Keep direct execution, argument escaping, inherited
   environment handling, and the existing `ELECTRON_RUN_AS_NODE`/CLI contract.
-- `src/main/daemon/daemon-host-relocation.ts`: scope the Windows runtime copy to
-  `%LOCALAPPDATA%\<executable-basename>\daemon-host\<version>\`, derived from
-  `process.execPath`; keep the existing `userData` fallback. For `Phorca.exe` this
+- `src/main/daemon/executable-host/windows/daemon-host-relocation.ts`: scope the Windows runtime copy to
+  `%LOCALAPPDATA%\<executable-basename>\daemon-host-profiles\<profile-key>\<version>\`,
+  derived from `process.execPath`; keep the existing `userData` fallback. For `Phorca.exe` this
   is the `Phorca` root; for the currently configured `Orca.exe` it is `Orca`.
   Never hardcode either product's root independently of its executable.
 - `config/nsis/orca-installer-hooks.nsh`: use
-  `$LOCALAPPDATA\${PRODUCT_FILENAME}\daemon-host` for uninstall cleanup, matching
-  the runtime basename. Keep the `${isUpdated}` guard: an update must not perform
+  `$LOCALAPPDATA\${PRODUCT_FILENAME}\daemon-host` and `daemon-host-profiles` for real-uninstall
+  cleanup, matching the runtime basename. Keep `${isUpdated}`: an update must not perform
   real-uninstall cleanup. Preserve upstream additive Markdown registration and
   legacy `orca-terminal-daemon.exe` cleanup in the same include.
 - Preserve upstream daemon survival and safety: copy the signed executable under
@@ -179,15 +181,15 @@ incompatible with the fork's local-build contract.
 - `src/main/orcad/orcad-browser-provider.ts`: keep installed Windows Phorca
   candidates before Orca within each of the `LOCALAPPDATA` and `ProgramFiles`
   locations. Retain the Orca fallback and upstream macOS/Linux behavior.
-- `config/scripts/smoke-packaged-cli.mjs`: retain the Windows 60-second timeout
+- `config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs`: retain the Windows 60-second timeout
   for Defender inspection and cleanup retries for Windows file locks without
   masking the original failure. Other platforms retain their existing timeout.
 
 Companion tests:
 `config/scripts/windows-executable-identity.test.mjs`,
-`config/scripts/build-windows-cli-launcher.test.mjs`,
+`config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs`,
 `config/scripts/electron-builder-markdown-associations.test.mjs`,
-`src/main/daemon/daemon-host-relocation.test.ts`, and
+`src/main/daemon/executable-host/windows/testing/daemon-host-relocation.test.ts`, and
 `src/main/orcad/orcad-browser-provider.test.ts`.
 Keep rebranded-executable coverage even though the Windows executable is named Orca.
 Read and maintain
@@ -199,7 +201,7 @@ boundary. Do not confuse the historical renamed daemon image with current behavi
 
 - `electron.vite.config.ts`: keep main-process `PHORCA_MANAGED_BUILD: 'true'`.
   `src/types/build-constants.d.ts` declares the corresponding boolean.
-- `src/main/updater.ts`: for managed builds, suppress automatic desktop checks,
+- `src/main/updater/updater-service.ts`: for managed builds, suppress automatic desktop checks,
   downloads, and installation; expose no upstream release-build list and report
   that the app is not quitting for an update. The user-initiated menu check opens
   the Phorca releases page instead. Keep the unmanaged upstream path intact.
@@ -209,7 +211,7 @@ boundary. Do not confuse the historical renamed daemon image with current behavi
   repository and the upstream release source.
 - `src/main/releases-page.ts`: open that URL in the system browser. Preserve the
   logged failure and visible error with a manual URL if opening fails.
-- `src/main/updater/updater-setup.ts`: retain the `suppressDesktopUpdates` boundary.
+- `src/main/updater/lifecycle/updater-setup.ts`: retain the `suppressDesktopUpdates` boundary.
   Updater state and event handlers still initialize, but startup/wake/focus
   polling, nudges, and handler-triggered automatic rechecks must not restart
   desktop updates. Do not replace setup with a blanket early return.
@@ -219,7 +221,7 @@ boundary. Do not confuse the historical renamed daemon image with current behavi
   boundary rather than allowing a new path to install Orca over Phorca.
 
 Companion tests: `src/main/releases-page.test.ts` and
-`src/main/updater.startup-scheduling.test.ts`. Retain the assertion that remote
+`src/main/updater/updater.startup-scheduling.test.ts`. Retain the assertion that remote
 update support remains available without desktop polling.
 
 ### 4. Release sync and shared release helpers
@@ -245,24 +247,23 @@ update support remains available without desktop polling.
 - Preserve the write-token trust boundary: the action runs only from Phorca's
   default branch, uses trusted scripts with Git hooks disabled, and does not
   install dependencies or execute fetched upstream code.
-- `config/scripts/latest-stable-release.mjs`: retain strict stable-tag parsing
+- `config/scripts/release/versioning/latest-stable-release.mjs`: retain strict stable-tag parsing
   (including leading-zero/unsafe-integer rejection), the metadata-preserving
   `latestStableDesktopRelease` selector, and caller-supplied eligibility.
-- `config/scripts/create-draft-release.mjs`: retain the exported
+- `config/scripts/release/publication/create-draft-release.mjs`: retain the exported
   `compareDesktopVersions` shared by the selectors/sync. Keep it in this module:
   release-cut restores this file onto older tags. Preserve upstream publication
   behavior and parameterized repositories; sync itself does not publish releases.
-- `.github/scripts/pr-test-loc-table.mjs`: retain reusable `mergeMarkedBlock`
-  alongside `mergeLocBlock`; both the LoC summary and sync reuse it. Replace only
-  the matching generated block, preserving reviewer text and ignoring an orphan
-  end marker before the start marker.
+- `.github/scripts/pr-test-loc-table.mjs`: retain reusable `mergeMarkedBlock` for
+  sync notes alongside upstream's ELI5-aware `mergeLocBlock`. Preserve reviewer
+  text and ignore an orphan end marker before the matching start marker.
 
 Companion tests:
-`config/scripts/latest-stable-release.test.mjs`,
-`config/scripts/sync-orca-release.test.mjs`,
-`config/scripts/sync-orca-release-api.test.mjs`, and
-`config/scripts/pr-test-loc-summary.test.mjs`.
-Keep workflow-coupled expectations aligned with Phorca's retained workflows.
+`config/scripts/release/versioning/latest-stable-release.test.mjs`,
+`config/scripts/sync-orca-release.test.mjs`, and
+`config/scripts/sync-orca-release-api.test.mjs`.
+Keep exact retired-suite paths, including upstream relocations, in
+`config/phorca-retired-tests.json`; do not restore them or exclude whole directories.
 Maintain the operational instructions in `.github/ORCA_SYNC.md`.
 
 ### 5. CI guard and deterministic runtime test
@@ -270,15 +271,23 @@ Maintain the operational instructions in `.github/ORCA_SYNC.md`.
 - `.github/scripts/check-root-directory-entries.mjs`: add `MERGE-CONFLICTS.md`
   to upstream's reviewed root-entry allowlist; retain other approved upstream
   entries and the guard's protections. Do not disable the guard.
-  Companion: `config/scripts/check-root-directory-entries.test.mjs`.
-- `src/main/runtime/orca-runtime-tests/lineage-and-scan-cache-part-03.spec.ts`:
-  retain deterministic per-repository scan-expiry coverage. Upstream now uses
-  `vi.setSystemTime()` without advancing runtime timers and mocks the repository
-  fingerprint so unchanged Git state cannot hide the rescan. Keep its behavior
-  assertions and restore the spy and timers afterward.
+  Its former companion suite is retired under the exact-path policy.
+- `src/main/runtime/orca-runtime-tests/worktree-scan-cache-ttl.spec.ts`:
+  retain upstream's per-repository TTL coverage. Fake Date without advancing
+  runtime timers and let fingerprint probes settle before asserting rescans.
+  Keep sibling-repository behavior assertions and restore timers afterward.
 - `AGENTS.md`: retain the entry-point link to this policy when taking upstream
   instruction updates. This file, the sync guide, and the two Windows references
   above account for the five documentation/instruction files in the inventory.
+
+### 6. Standalone PR Guide plugin
+
+Keep `phorca-plugins/pr-guide/` from the recorded Phorca default branch, including
+its configured session model, terminal capability gate, generated runtime bundles,
+and behavioral tests. Preserve its `.oxlintrc.json` exclusion and the
+`phorca-plugins/` boundary in the changed-code quality classifier; the plugin owns
+its build and tests. Run `npm test` from that plugin directory when verifying it.
+
 
 ## Verification before accepting a merge
 
@@ -295,7 +304,7 @@ Maintain the operational instructions in `.github/ORCA_SYNC.md`.
   install, menu opens the private releases URL, and remote update support remains.
   Tests running without the compile-time flag alone do not prove managed behavior.
 - For packaging changes, build the affected platform artifacts and run
-  `node config/scripts/smoke-packaged-cli.mjs --app-dir=<unpacked-app-path>`. On Windows,
+  `node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=<unpacked-app-path>`. On Windows,
   verify the emitted executable identity, CLI argument forwarding, daemon copy
   root, and uninstall/update ownership agree. Use isolated CI for installer and
   native-focus checks; do not uninstall the user's running app.

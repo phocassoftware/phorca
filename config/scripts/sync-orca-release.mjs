@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { mergeMarkedBlock } from '../../.github/scripts/pr-test-loc-table.mjs'
-import { compareDesktopVersions } from './create-draft-release.mjs'
-import { latestStableDesktopRelease, parseDesktopStableTag } from './latest-stable-release.mjs'
+import { compareDesktopVersions } from './release/publication/create-draft-release.mjs'
+import {
+  latestStableDesktopRelease,
+  parseDesktopStableTag
+} from './release/versioning/latest-stable-release.mjs'
 
 export const ORCA_SYNC_BRANCH = 'codex/AI-101-orca-release-sync'
 const UPSTREAM = { owner: 'stablyai', repo: 'orca' }

@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { runOrcaReleaseAction } from './sync-orca-release-action.mjs'
@@ -547,6 +547,7 @@ describe('Orca sync with real Git repositories', () => {
     mkdirSync(join(f.upstream, 'config', 'scripts'), { recursive: true })
     const updateScripts = (version) => {
       for (const path of [...retiredTests, ...retainedPaths]) {
+        mkdirSync(dirname(join(f.upstream, path)), { recursive: true })
         writeFileSync(join(f.upstream, path), `${version}: ${path}\n`)
       }
     }

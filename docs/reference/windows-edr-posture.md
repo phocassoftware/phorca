@@ -52,7 +52,7 @@ and `orca-terminal-daemon.exe` report `Valid CN=SignPath Foundation`.
 
 ### The daemon runs from a copy of our own image
 
-`src/main/daemon/daemon-host-relocation.ts` copies the Electron runtime into
+`src/main/daemon/executable-host/windows/daemon-host-relocation.ts` copies the Electron runtime into
 `%LOCALAPPDATA%\<executable basename>\daemon-host-profiles\<profile key>\<version>\` and forks the terminal daemon from
 there. The executable basename and profile key isolate separately named installs and user-data profiles.
 
