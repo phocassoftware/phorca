@@ -11,6 +11,13 @@ import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } f
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../shared/local-runtime-rpc-limits'
+import { daemonSocketDirIsTrusted } from '../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'
+
+// Agents read these; a blip must not send them to `orca open`, which raises the window.
+const TRANSIENT_DISCONNECT_NEXT_STEPS = [
+  'Orca is usually busy or restarting: wait a few seconds, then retry. If the command changes something, first check whether it already took effect, and retry with the request ID this error names, if any.',
+  "Do not run 'orca open' to recover. Run it only if the user asks, or if 'orca status --json' reports Orca is not running or still cannot connect after about 30 seconds of retries."
+]
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -39,6 +46,16 @@ export async function sendRequest<TResult>(
         new RuntimeClientError(
           'runtime_unavailable',
           'No compatible transport found in Orca runtime metadata.'
+        )
+      )
+      return
+    }
+    // A relocated socket lives in shared /tmp; never send the auth token to a planted listener.
+    if (transport.kind === 'unix' && !daemonSocketDirIsTrusted(transport.endpoint)) {
+      reject(
+        new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca runtime socket directory is not private to this user.'
         )
       )
       return
@@ -93,7 +110,7 @@ export async function sendRequest<TResult>(
           new RuntimeClientError(
             'runtime_unavailable',
             'This terminal could not connect to Orca.',
-            { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
+            { nextSteps: TRANSIENT_DISCONNECT_NEXT_STEPS }
           )
       })
     })
@@ -104,7 +121,7 @@ export async function sendRequest<TResult>(
         error: new RuntimeClientError(
           'runtime_unavailable',
           'Orca closed the connection before responding.',
-          { nextSteps: ['Check that Orca is open and that this terminal can access it.'] }
+          { nextSteps: TRANSIENT_DISCONNECT_NEXT_STEPS }
         )
       })
     })

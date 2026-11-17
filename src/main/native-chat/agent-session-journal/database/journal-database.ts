@@ -9,6 +9,7 @@ import {
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
   JOURNAL_DB_SCHEMA_VERSION
 } from './journal-database-schema'
+import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
@@ -16,7 +17,7 @@ import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-att
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-const JOURNAL_SYNCHRONOUS = 'FULL'
+const JOURNAL_SYNCHRONOUS = 'NORMAL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -79,6 +80,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
       ON agent_session_records (CASE WHEN json_valid(record_json)
         THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
     ensureAgentSessionAttachmentClaimTables(probe)
+    ensurePRWatchTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -97,7 +99,7 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
   db.pragma('journal_mode = WAL')
   db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // FULL fsyncs submissions before dispatch; checkpoint_fullfsync also flushes macOS drive caches.
+  // WAL commits survive app crashes; OS crashes or power loss may roll back uncheckpointed commits.
   db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
   db.pragma('checkpoint_fullfsync = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)

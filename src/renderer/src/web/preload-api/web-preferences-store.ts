@@ -1,10 +1,7 @@
 import * as chatSettings from './web-native-chat-settings'
 import type { PreloadApi } from '../../../../preload/api-types'
-import {
-  getDefaultSettings,
-  getDefaultUIState,
-  getWorktreeCardModeProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings, getDefaultUIState } from '../../../../shared/constants'
+import { getWorktreeCardModeProperties } from '../../../../shared/worktree/row-display/card-properties'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
@@ -23,6 +20,7 @@ import {
   retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
+import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
@@ -32,7 +30,7 @@ type SettingsResult = { settings: Partial<GlobalSettings> }
 
 export function getStoredSettings(): GlobalSettings {
   webRuntimeState.activeEnvironment ??= readStoredWebRuntimeEnvironment()
-  const defaults = getDefaultSettings('~')
+  const defaults = { ...getDefaultSettings('~'), artifactSharingEnabled: false } // Host grants it.
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
@@ -76,14 +74,13 @@ export function getStoredSettings(): GlobalSettings {
   const settings = mergeSettings(
     {
       ...defaults,
-      floatingTerminalEnabled: false,
-      rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: null
     },
     migratedStored
   )
   delete settings.nativeChatAutoContinueAfterUsageLimit
   delete settings.zcodePlanSite
+  settings.floatingTerminalEnabled = false // A browser tab cannot host it, whatever was stored (#40268).
   return settings
 }
 
@@ -122,7 +119,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   try {
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
     const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
-    const runtimeSettings: Partial<GlobalSettings> = {}
+    const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -253,6 +250,8 @@ export async function syncRuntimeBackedSettings(
           webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
         }
         delete runtimeSettings.worktreeVisibilityDefaults
+        // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
+        delete runtimeSettings.voice
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (

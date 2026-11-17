@@ -2,13 +2,11 @@ import { AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY } from '../../../../.
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getDecorativeAgentTitleSignature } from '../../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { findRegisteredTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
-import {
-  collectAgentPaneConversations,
-  type AiVaultTitleRequest
-} from './ai-vault-tab-title-requests'
+import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
+import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
 
 export function aiVaultTitleRequestKey(request: AiVaultTitleRequest): string {
   return `${request.tabId}\0${request.paneKey}\0${request.executionHostId}\0${request.agent}\0${request.providerSession.id}\0${request.providerSession.transcriptPath ?? ''}`

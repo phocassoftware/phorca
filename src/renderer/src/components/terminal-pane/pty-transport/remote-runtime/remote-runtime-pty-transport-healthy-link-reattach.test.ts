@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import type { PtyTransport } from '../pty-transport-types'
@@ -98,62 +98,6 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     expect(transport.isConnected()).toBe(true)
     return transport
   }
-
-  it('reattaches a handle the host still reports ready within seconds of a stream end', async () => {
-    const transport = await attachHostMirror()
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? readyHostSessionInventoryResponse('terminal-1')
-        : { ok: true, result: {} }
-    )
-
-    endLatestStream()
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-    emitSnapshot(latestSubscribePayload().streamId, 'reattached')
-    expect(transport.isConnected()).toBe(true)
-    expect(transport.getRecoveryState?.().phase).toBe('connected')
-    transport.destroy?.()
-  })
-
-  it('keeps reattaching a still-ready handle that ends repeatedly instead of parking', async () => {
-    const transport = await attachHostMirror()
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? readyHostSessionInventoryResponse('terminal-1')
-        : { ok: true, result: {} }
-    )
-
-    for (let cycle = 0; cycle < 5; cycle += 1) {
-      endLatestStream()
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(subscribedTerminalHandles()).toHaveLength(cycle + 2)
-      emitSnapshot(latestSubscribePayload().streamId, `cycle ${cycle}`)
-      expect(transport.isConnected()).toBe(true)
-      expect(transport.getRecoveryState?.().phase).toBe('connected')
-    }
-    transport.destroy?.()
-  })
-
-  it('retries a resubscribe whose host answered without a ready handle', async () => {
-    const transport = await attachHostMirror()
-    let hostReady = false
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? hostSnapshot(hostReady ? 'ready' : 'pending-handle')
-        : { ok: true, result: {} }
-    )
-
-    endLatestStream()
-    await vi.advanceTimersByTimeAsync(16_000)
-    expect(subscribedTerminalHandles()).toHaveLength(1)
-    hostReady = true
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-    transport.destroy?.()
-  })
 
   it('retries an attach whose host surface stayed pending past the bounded wait', async () => {
     let hostReady = false

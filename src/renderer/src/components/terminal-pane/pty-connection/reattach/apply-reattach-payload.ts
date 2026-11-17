@@ -2,7 +2,7 @@ import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
 } from '../startup/terminal-launch-result-policy'
-import { waitForTerminalReplayWritesParsed } from '../../replay-guard'
+import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
@@ -16,7 +16,7 @@ import {
   shouldSkipAltFrameForWidthMismatch
 } from '../../snapshots/terminal-snapshot-replay-paint'
 
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'
 import { mainStartsPane } from '../spawn/main-starts-pane'
 import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
@@ -116,7 +116,11 @@ export function createReattachPayloadHandlers(
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       if (typeof ctx.connectResult.snapshotSeq === 'number') {
-        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+        session.streamPosition.anchor(
+          ctx.ptyId,
+          ctx.connectResult.snapshotSeq,
+          ctx.connectResult.pendingEscapeTailAnsi ?? ''
+        )
       }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
@@ -186,7 +190,11 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         if (typeof modelSnapshot.seq === 'number') {
-          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+          session.streamPosition.anchor(
+            ctx.ptyId,
+            modelSnapshot.seq,
+            modelSnapshot.pendingEscapeTailAnsi ?? ''
+          )
         }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {

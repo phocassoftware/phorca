@@ -3,7 +3,7 @@ import type { DeviceScope } from '../../../../../shared/runtime-session-contract
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { TokenDeviceEntry } from './device-entry'
 import { validGrants } from './device-registry-row-validation'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 
 export function mintDeviceCredential(): { deviceId: string; token: string } {
   return { deviceId: randomUUID(), token: randomBytes(24).toString('hex') }
@@ -25,6 +25,8 @@ export function mintTokenDevice(
     scope,
     pairedAt,
     lastSeenAt: 0,
+    // Every new offer can be exchanged for a client-held credential; legacy clients ignore this.
+    ticket: true,
     pairingReach,
     ...(validatedGrants ? { grants: validatedGrants } : {}),
     ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {})

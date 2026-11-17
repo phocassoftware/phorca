@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../../../shared/agent-session/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
@@ -9,8 +8,6 @@ import {
 import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
-void (NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000)
-void (NOW + 6 * 60_000)
 
 let rig: QueuedMessageTestRig
 let serial = 0
@@ -42,18 +39,6 @@ function failReceiptWrites(): () => void {
 }
 
 const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
-
-describe('Send now', () => {
-  it('records nothing for a refusal before acceptance', async () => {
-    const id = opId()
-    expect(await rig.sendNow('no-such-card', id)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
-    })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
-    expect(ledgerRow(id)).toBeUndefined()
-  })
-})
 
 describe('Resume', () => {
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {

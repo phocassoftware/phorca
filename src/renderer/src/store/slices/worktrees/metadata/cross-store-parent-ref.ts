@@ -3,12 +3,12 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
-import { crossStoreParentRefOfRow } from '../../../../../../shared/worktree/lineage-row-identity'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
+import { crossStoreParentRefOfRow } from '../../../../../../shared/worktree/lineage/lineage-row-identity'
 import { assertCrossStoreLineageSupported } from '../../../../../../shared/worktree-runtime-capabilities'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
-import { selectLineageStoreInstallationId } from '../../../cross-store-lineage-parents'
+import { selectLineageStoreInstallationId } from './cross-store-lineage-parents'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 
 /** Whether a parent lives in another Orca store than the child, so the link needs a cross-store ref. */

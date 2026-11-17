@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard-text'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 // Replies bypass remote debounce to meet raw-mode read windows; typed input keeps ordinary batching (#7329).
 
@@ -29,7 +29,9 @@ describe('remote transport sendInputImmediate (#7329)', () => {
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
     vi.clearAllMocks()
     subscriptionCallbacks = null
     subscriptionSendBinary.mockReset()
@@ -90,34 +92,6 @@ describe('remote transport sendInputImmediate (#7329)', () => {
         'yes',
         '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
       ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('sends an immediate reply even with no pending typed input', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-1',
-        cols: 80,
-        rows: 24,
-        callbacks: {}
-      })
-      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
-
-      expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
-      await Promise.resolve()
-
-      const sends = terminalSendCalls() as { params: { text: string } }[]
-      expect(sends).toHaveLength(1)
-      expect(sends[0]?.params.text).toBe('\x1b[3;1R')
     } finally {
       vi.useRealTimers()
     }

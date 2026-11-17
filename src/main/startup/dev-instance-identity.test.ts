@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
+import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './profile-startup/dev-instance-identity'
 
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
