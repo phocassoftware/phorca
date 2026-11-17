@@ -92,6 +92,12 @@ const NON_UNIT_TEST_RUNNERS = [
     include: ['docs/site/tests/*.test.mjs'],
     sources: ['docs/site/package.json'],
     mirrors: ['node --test tests/*.test.mjs']
+  },
+  {
+    name: 'Phorca PR Guide',
+    include: ['phorca-plugins/pr-guide/*.test.mjs'],
+    sources: ['phorca-plugins/pr-guide/package.json'],
+    mirrors: ['node --test *.test.mjs']
   }
 ]
 
@@ -100,13 +106,12 @@ const DEDICATED_UNIT_FILES = UNIT_EXCLUDE.filter((glob) => !defaultExclude.inclu
 export const TEST_RUNNERS = [
   { name: 'unit (config/vitest.config.ts)', include: UNIT_INCLUDE, exclude: UNIT_EXCLUDE },
   {
-    // Why mirrors: an UNIT_EXCLUDE entry no workflow names would otherwise leave CI silently.
-    name: 'dedicated unit jobs (UNIT_EXCLUDE)',
+    name: 'local only (upstream dedicated unit jobs)',
     include: DEDICATED_UNIT_FILES,
-    // Those jobs run config/vitest.config.ts, so a file there still needs a UNIT_INCLUDE name.
     within: UNIT_INCLUDE,
-    sources: ['.github/workflows/pr.yml', '.github/workflows/unit-tests.yml'],
-    mirrors: DEDICATED_UNIT_FILES.map((glob) => glob.replace(/\*\*$/, ''))
+    sources: ['config/vitest.config.ts'],
+    mirrors: ['balancedShards ? UNIT_EXCLUDE : defaultExclude'],
+    manual: true
   },
   ...NON_UNIT_TEST_RUNNERS
 ]

@@ -75,7 +75,7 @@ export function renderLocBlock(totals) {
 
 function stripLocBlock(body) {
   const start = body.indexOf(LOC_BLOCK_START)
-  const end = body.indexOf(LOC_BLOCK_END)
+  const end = body.indexOf(LOC_BLOCK_END, start + LOC_BLOCK_START.length)
   if (start === -1 || end === -1 || end < start) {
     return body
   }
@@ -112,4 +112,24 @@ export function mergeLocBlock(body, totals) {
     return `${rest.trimEnd()}\n\n${block}\n`
   }
   return `${rest.slice(0, insertAt).trimEnd()}\n\n${block}\n\n${rest.slice(insertAt)}`
+}
+
+export function mergeMarkedBlock(body, block, startMarker, endMarker) {
+  const current = body ?? ''
+  const start = current.indexOf(startMarker)
+  const end = current.indexOf(endMarker, start + startMarker.length)
+
+  if (start !== -1 && end !== -1 && end > start) {
+    const rest = current.slice(end + endMarker.length).replace(/^\r?\n/, '')
+    if (rest.trim().length === 0) {
+      return `${current.slice(0, start)}${block}\n`
+    }
+    return `${current.slice(0, start)}${block}\n\n${rest.replace(/^\r?\n+/, '')}`
+  }
+
+  if (current.trim().length === 0) {
+    return `${block}\n`
+  }
+
+  return `${block}\n\n${current.replace(/^\r?\n+/, '')}`
 }

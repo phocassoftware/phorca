@@ -15,6 +15,13 @@ const electronBuilderConfig = require('../../../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.productName).toBe('Phorca')
+    expect(electronBuilderConfig.appId).toBe(
+      require('../../../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-packaging-notes-'))
     const source = join(root, 'app')

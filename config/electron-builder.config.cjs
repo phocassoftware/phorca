@@ -8,6 +8,7 @@ const {
 const {
   giveMacExecutableUniqueUuid
 } = require('./scripts/desktop-distribution/macos/macos-executable-uuid.cjs')
+const { writeWindowsExecutableIdentity } = require('./scripts/windows-executable-identity.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -123,7 +124,7 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+const appId = 'com.phocassoftware.phorca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -251,8 +252,8 @@ const ORCA_MAC_TEAM_ID = '6CX3WHS9HZ'
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: 'Phorca',
+  protocols: [{ name: 'Phorca', schemes: ['orca'] }],
   toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
@@ -423,6 +424,13 @@ module.exports = {
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
+    }
+    if (context.electronPlatformName === 'win32') {
+      writeWindowsExecutableIdentity({
+        appOutDir: context.appOutDir,
+        resourcesDir,
+        packager: context.packager
+      })
     }
     if (context.electronPlatformName === 'darwin') {
       applyMacHelperFolderUsageDescriptions(

@@ -13,6 +13,9 @@ import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
+import { openReleasesPage } from '../releases-page'
+
+const IS_PHORCA_MANAGED_BUILD = typeof PHORCA_MANAGED_BUILD !== 'undefined' && PHORCA_MANAGED_BUILD
 
 const updater = new UpdaterSetup()
 
@@ -48,23 +51,33 @@ export function installRemoteServerUpdate(runtimeId: string): RemoteServerUpdate
 }
 
 export function checkForUpdates(): void {
-  updater.checkForUpdates()
+  if (!IS_PHORCA_MANAGED_BUILD) {
+    updater.checkForUpdates()
+  }
 }
 
 export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
+  if (IS_PHORCA_MANAGED_BUILD) {
+    void openReleasesPage()
+    return
+  }
   updater.checkForUpdatesFromMenu(options)
 }
 
 export function downloadUpdate(): void {
-  updater.downloadUpdate()
+  if (!IS_PHORCA_MANAGED_BUILD) {
+    updater.downloadUpdate()
+  }
 }
 
 export function quitAndInstall(): void {
-  updater.quitAndInstall()
+  if (!IS_PHORCA_MANAGED_BUILD) {
+    updater.quitAndInstall()
+  }
 }
 
 export function isQuittingForUpdate(): boolean {
-  return updater.isQuittingForUpdate()
+  return IS_PHORCA_MANAGED_BUILD ? false : updater.isQuittingForUpdate()
 }
 
 export async function getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
@@ -79,7 +92,7 @@ export async function listAvailableReleaseBuilds(
   channel: ReleaseChannel,
   options?: ReleaseBuildListOptions
 ): Promise<ReleaseBuild[]> {
-  return updater.listAvailableReleaseBuilds(channel, options)
+  return IS_PHORCA_MANAGED_BUILD ? [] : updater.listAvailableReleaseBuilds(channel, options)
 }
 
 export function dismissNudge(): void {
@@ -94,5 +107,5 @@ export function setupAutoUpdater(
   mainWindow: BrowserWindow | null,
   opts?: UpdaterSetupOptions
 ): void {
-  updater.setupAutoUpdater(mainWindow, opts)
+  updater.setupAutoUpdater(mainWindow, opts, IS_PHORCA_MANAGED_BUILD)
 }

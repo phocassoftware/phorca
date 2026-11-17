@@ -4,10 +4,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { agentBrowserCommandOf } from '../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
+import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser-name'
 import {
+  installedElectronCandidates,
   resolveInstalledElectronExecutable,
   resolveOrcadBrowserProvider
 } from './orcad-browser-provider'
+import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-browser-process'
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
@@ -92,6 +95,121 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
+})
+
+describe('ExternalChromiumBrowserProcess', () => {
+  it('navigates, evaluates, and screenshots through the operator browser', async () => {
+    const processHandle = new ExternalChromiumBrowserProcess(
+      '/agent-browser',
+      { executablePath: '/operator/chromium', provider: 'chromium' },
+      root
+    )
+    await processHandle.start()
+    const commands = processHandle.createCommands({
+      getRuntimeId: () => 'fixture-runtime',
+      getAgentBrowserBridge: () => null,
+      resolveWorkspaceSelector: async (selector) => ({ id: selector }),
+      resolveBrowserWorkspace: async (selector) => ({ id: selector }),
+      resolveBrowserNetworkExecutionHost: () => {
+        throw new Error('No browser network execution host')
+      },
+      getBrowserHostLeaseRegistry: () => {
+        throw new Error('No browser host lease registry')
+      },
+      getBrowserHostRequestRegistry: () => {
+        throw new Error('No browser host request registry')
+      },
+      getRuntimeBrowserPageRegistry: () => {
+        throw new Error('No runtime browser page registry')
+      },
+      getAuthoritativeWindow: () => {
+        throw new Error('No renderer')
+      },
+      getAvailableAuthoritativeWindow: () => null,
+      getOffscreenBrowserBackend: () => null
+    })
+
+    await expect(
+      commands.browserTabCreate({
+        url: 'https://fixture.test/',
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toEqual({ browserPageId: 'page-1' })
+    await expect(
+      commands.browserGoto({
+        url: 'https://fixture.test/next',
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toEqual({ url: 'https://fixture.test/next', title: 'Fixture page' })
+    await expect(
+      commands.browserEval({
+        expression: 'document.title',
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toEqual({ result: 'Fixture page', origin: 'https://fixture.test/' })
+    await expect(
+      commands.browserScreenshot({ format: 'png', worktree: 'worktree-1', page: 'page-1' })
+    ).resolves.toEqual({ data: Buffer.from('fixture-image').toString('base64'), format: 'png' })
+    await expect(
+      commands.browserSnapshot({
+        interactive: true,
+        delta: true,
+        worktree: 'worktree-1',
+        page: 'page-1'
+      })
+    ).resolves.toMatchObject({
+      browserPageId: 'page-1',
+      snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 },
+      url: 'https://fixture.test/next'
+    })
+    await expect(
+      commands.browserExec({
+        page: 'page-1',
+        worktree: 'worktree-1',
+        command:
+          '--session stolen --cdp 9222 --profile /tmp/stolen --executable-path /bad --args bad eval document.title'
+      })
+    ).resolves.toEqual({ result: 'Fixture page', origin: 'https://fixture.test/' })
+    const execArgs = runProcessMock.mock.calls.at(-1)?.[0].args ?? []
+    expect(execArgs).not.toContain('stolen')
+    expect(execArgs).not.toContain('9222')
+    expect(execArgs).not.toContain('/tmp/stolen')
+    expect(execArgs).not.toContain('/bad')
+
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.objectContaining({ AGENT_BROWSER_EXECUTABLE_PATH: '/operator/chromium' })
+      })
+    )
+    await processHandle.stop()
+  })
+})
+
+describe('cross-platform browser provider paths', () => {
+  it('resolves installed Electron launchers on macOS, Linux, and Windows', () => {
+    expect(installedElectronCandidates('darwin', '/Users/test', {})).toContain(
+      '/Users/test/Applications/Orca.app/Contents/MacOS/Orca'
+    )
+    expect(installedElectronCandidates('linux', '/home/test', {})).toContain(
+      '/home/test/.local/bin/orca-ide'
+    )
+    const windowsCandidates = installedElectronCandidates('win32', 'C:\\Users\\test', {
+      LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local'
+    })
+    expect(windowsCandidates).toContain(
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Phorca\\Phorca.exe'
+    )
+    expect(windowsCandidates).toContain('C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe')
+  })
+
+  it('uses platform-specific bundled agent-browser names', () => {
+    expect(orcadAgentBrowserNativeName('darwin', 'arm64')).toBe('agent-browser-darwin-arm64')
+    expect(orcadAgentBrowserNativeName('linux', 'x64')).toBe('agent-browser-linux-x64')
+    expect(orcadAgentBrowserNativeName('win32', 'x64')).toBe('agent-browser-win32-x64.exe')
+  })
 })
 
 describe.skipIf(process.platform === 'win32')('resolveInstalledElectronExecutable', () => {

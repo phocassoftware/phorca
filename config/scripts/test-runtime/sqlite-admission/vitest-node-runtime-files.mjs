@@ -5,9 +5,9 @@ const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
-  'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
+  'config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
