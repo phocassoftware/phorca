@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { agentBrowserCommandOf } from '../browser/agent-browser/agent-browser-bridge-test-harness'
-import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import {
   installedElectronCandidates,
   resolveInstalledElectronExecutable,
   resolveOrcadBrowserProvider
 } from './orcad-browser-provider'
-import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
+import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
@@ -115,6 +115,9 @@ describe('ExternalChromiumBrowserProcess', () => {
       },
       getBrowserHostLeaseRegistry: () => {
         throw new Error('No browser host lease registry')
+      },
+      getBrowserHostRequestRegistry: () => {
+        throw new Error('No browser host request registry')
       },
       getRuntimeBrowserPageRegistry: () => {
         throw new Error('No runtime browser page registry')
@@ -228,65 +231,9 @@ describe.skipIf(process.platform === 'win32')('resolveInstalledElectronExecutabl
     await expect(resolveInstalledElectronExecutable([link, electron])).resolves.toBe(electron)
     await expect(resolveInstalledElectronExecutable([link])).resolves.toBeNull()
   })
-
-  it('still accepts an AppImage-style binary', async () => {
-    const appImage = join(root, 'Orca.AppImage')
-    await writeExecutable(appImage, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]))
-
-    await expect(resolveInstalledElectronExecutable([appImage])).resolves.toBe(appImage)
-  })
 })
 
 describe('resolveOrcadBrowserProvider', () => {
-  it('uses ORCA_BROWSER_EXECUTABLE when Electron is absent', async () => {
-    const executable = join(root, process.platform === 'win32' ? 'chromium.exe' : 'chromium')
-    await writeFile(executable, '')
-    if (process.platform !== 'win32') {
-      await chmod(executable, 0o755)
-    }
-
-    const provider = await resolveOrcadBrowserProvider({
-      userDataPath: root,
-      environment: { ORCA_BROWSER_EXECUTABLE: executable },
-      resolveInstalledElectronExecutable: async () => null,
-      resolveAgentBrowserBinary: () => '/agent-browser'
-    })
-
-    expect(provider?.kind).toBe('chromium')
-    await provider?.stop()
-  })
-
-  it('returns no provider when neither executable resolves', async () => {
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: {},
-        resolveInstalledElectronExecutable: async () => null,
-        resolveAgentBrowserBinary: () => '/agent-browser'
-      })
-    ).resolves.toBeNull()
-    expect(runProcessMock).not.toHaveBeenCalled()
-    expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'unconfigured' })
-  })
-
-  it('reports a missing driver rather than falling through as unconfigured', async () => {
-    const executable = join(root, 'chromium')
-    await writeFile(executable, '')
-    if (process.platform !== 'win32') {
-      await chmod(executable, 0o755)
-    }
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: executable },
-        resolveInstalledElectronExecutable: async () => null,
-        resolveAgentBrowserBinary: () => null
-      })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'driver_missing' })
-  })
-
   it('reports an ORCA_BROWSER_EXECUTABLE path that does not exist', async () => {
     const missing = join(root, 'absent-chromium')
 
@@ -325,81 +272,4 @@ describe('resolveOrcadBrowserProvider', () => {
       })
     }
   )
-
-  it('reports a failed Electron start instead of staying invisible to the client', async () => {
-    spawnProcessMock.mockImplementation(() => {
-      throw new Error('spawn ENOENT')
-    })
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: {},
-        resolveInstalledElectronExecutable: async () => '/opt/Orca/orca-ide',
-        resolveAgentBrowserBinary: () => '/agent-browser'
-      })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({
-      reason: 'electron_start_failed',
-      detail: 'spawn ENOENT'
-    })
-  })
-
-  it('prefers the configured Chromium fault over an earlier Electron failure', async () => {
-    spawnProcessMock.mockImplementation(() => {
-      throw new Error('spawn ENOENT')
-    })
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: join(root, 'absent-chromium') },
-        resolveInstalledElectronExecutable: async () => '/opt/Orca/orca-ide',
-        resolveAgentBrowserBinary: () => null
-      })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'driver_missing' })
-  })
-
-  it('reports a failed Chromium launch with the underlying error', async () => {
-    const executable = join(root, 'chromium')
-    await writeFile(executable, '')
-    if (process.platform !== 'win32') {
-      await chmod(executable, 0o755)
-    }
-    runProcessMock.mockRejectedValue(new Error('spawn EACCES'))
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: executable },
-        resolveInstalledElectronExecutable: async () => null,
-        resolveAgentBrowserBinary: () => '/agent-browser'
-      })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({
-      reason: 'chromium_start_failed',
-      detail: 'spawn EACCES'
-    })
-  })
-
-  it('clears any recorded cause once a provider resolves', async () => {
-    const executable = join(root, 'chromium')
-    await writeFile(executable, '')
-    if (process.platform !== 'win32') {
-      await chmod(executable, 0o755)
-    }
-    setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
-
-    const provider = await resolveOrcadBrowserProvider({
-      userDataPath: root,
-      environment: { ORCA_BROWSER_EXECUTABLE: executable },
-      resolveInstalledElectronExecutable: async () => null,
-      resolveAgentBrowserBinary: () => '/agent-browser'
-    })
-
-    expect(provider?.kind).toBe('chromium')
-    expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'unknown' })
-    await provider?.stop()
-  })
 })

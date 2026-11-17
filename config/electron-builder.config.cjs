@@ -45,7 +45,8 @@ const {
   assertMobileWebBundleBuilt
 } = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs')
 const {
-  verifyPackagedPluginResources
+  verifyPackagedPluginResources,
+  verifyPackagedPluginTypings
 } = require('./scripts/desktop-distribution/runtime-verification/verify-packaged-plugin-resources.cjs')
 const {
   assertPackagedServeSelectionEntry,
@@ -147,6 +148,12 @@ const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
+// electron-builder always drops `*.d.ts` from app files, so `orca plugin types` reads these copies.
+const pluginAuthorTypingsResources = {
+  from: 'resources/plugins',
+  to: 'plugins',
+  filter: ['declarative/*.d.ts', 'types/*.d.ts']
+}
 // Packaged main/CLI/SSH/speech paths lack pnpm links; copy runtime closure so bare requires cannot fall through to checkout dependencies.
 // Ship only the 166KB emoji dataset used by worktree naming, not all 49MB of emojibase-data.
 const emojiShortcodeDatasetResource = {
@@ -159,6 +166,7 @@ const commonExtraResources = [
   orcadTemplateNodeModulesExtraResource,
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
+  pluginAuthorTypingsResources,
   skillFreshnessResources,
   ...agentBrowserSkillResources,
   nativeChatVisualsResource,
@@ -350,11 +358,8 @@ module.exports = {
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/plugins/plugin-authoring-checks.js',
-    // `orca plugin types` copies the author typings from here in Node mode.
-    'resources/plugins/declarative/orca*.d.ts',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
-    'resources/plugins/types/*.d.ts',
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
@@ -490,6 +495,7 @@ module.exports = {
     }
     // Validate real electron-builder output so broken extraResources mappings fail before shipping.
     verifyPackagedPluginResources(resourcesDir)
+    verifyPackagedPluginTypings(resourcesDir)
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
@@ -605,6 +611,8 @@ module.exports = {
         rank: 'Alternate'
       }))
     ],
+    // Bundled ONNX Runtime (speech) needs macOS 13.4 (#22690); the update-manifest gate reads this from Info.plist.
+    minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
