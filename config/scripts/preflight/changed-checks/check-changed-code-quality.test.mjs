@@ -3,9 +3,19 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { collectBaseLineBlocks, collectAddedLineRanges } from './check-changed-code-quality.mjs'
+import {
+  collectBaseLineBlocks,
+  collectAddedLineRanges,
+  isRootCodeQualityPath
+} from './check-changed-code-quality.mjs'
 
 describe('changed-code quality line matching', () => {
+  it('leaves Cloud and standalone plugins to their own quality checks', () => {
+    expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
+    expect(isRootCodeQualityPath('phorca-plugins/pr-guide/comment-ui.jsx')).toBe(false)
+    expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
+  })
+
   it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
     const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-literal-'))
     try {

@@ -5,12 +5,15 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
+  renameSync,
   rmSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
 import os from 'node:os'
-import { dirname, join } from 'node:path'
+import { createRequire } from 'node:module'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAppEnvironment, type AppEnvironment } from '../../../../../shared/app-environment'
@@ -64,6 +67,8 @@ function relocatedHostRoot(): string {
 }
 
 const PROCESS_TREE_DIR_REL = join('resources', 'node_modules', '@vscode', 'windows-process-tree')
+const HOST_PREBUILD = `win32-${process.arch}`
+const OTHER_PREBUILD = process.arch === 'arm64' ? 'win32-x64' : 'win32-arm64'
 
 const PROCESS_TREE_ADDON_REL = join(
   'resources',
@@ -112,6 +117,90 @@ afterEach(() => {
 })
 
 describe('materializeRelocatedDaemonHost', () => {
+  it('copies the tree, writes the marker, and returns mirrored fork paths', () => {
+    const result = materializeRelocatedDaemonHost()
+    expect(result).not.toBeNull()
+    const dest = relocatedHostRoot()
+    expect(result?.execPath).toBe(join(dest, 'Orca.exe'))
+    expect(result?.entryPath).toBe(
+      join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+    )
+    expect(existsSync(result!.execPath)).toBe(true)
+    expect(existsSync(result!.entryPath)).toBe(true)
+    expect(
+      existsSync(
+        join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node')
+      )
+    ).toBe(true)
+    expect(
+      existsSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'))
+    ).toBe(true)
+    expect(existsSync(join(dest, 'ffmpeg.dll'))).toBe(false)
+    expect(existsSync(join(dest, 'libEGL.dll'))).toBe(false)
+    expect(
+      existsSync(
+        join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.pdb')
+      )
+    ).toBe(false)
+    const prebuildsDest = join(dest, 'resources', 'node_modules', 'node-pty', 'prebuilds')
+    expect(existsSync(join(prebuildsDest, HOST_PREBUILD, 'pty.node'))).toBe(true)
+    expect(existsSync(join(prebuildsDest, OTHER_PREBUILD, 'pty.node'))).toBe(false)
+    const marker = JSON.parse(readFileSync(join(dest, '.materialized.json'), 'utf8'))
+    expect(marker.version).toBe('9.9.9')
+    expect(marker.entryRelPath).toBe('resources/app.asar.unpacked/out/main/daemon-entry.js')
+    const processTreeDest = join(
+      dest,
+      'resources',
+      'node_modules',
+      '@vscode',
+      'windows-process-tree'
+    )
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.node'))).toBe(
+      true
+    )
+    expect(existsSync(join(processTreeDest, 'lib', 'index.js'))).toBe(true)
+    expect(existsSync(join(processTreeDest, 'lib', 'promises.js'))).toBe(true)
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.pdb'))).toBe(
+      false
+    )
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'obj'))).toBe(false)
+    expect(existsSync(join(processTreeDest, 'src'))).toBe(false)
+    // Resolve the bare package so missing package.json cannot hide behind a successful .node subpath lookup.
+    expect(
+      createRequire(
+        join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
+      ).resolve('@vscode/windows-process-tree')
+    ).toBe(realpathSync(join(processTreeDest, 'lib', 'index.js')))
+  })
+
+  it('copies the exe verbatim: same file name and same bytes as the install-dir exe', () => {
+    const result = materializeRelocatedDaemonHost()
+    const sourceExe = join(installDir, 'Orca.exe')
+    expect(basename(result!.execPath)).toBe(basename(sourceExe))
+    expect(readFileSync(result!.execPath)).toEqual(readFileSync(sourceExe))
+  })
+
+  it('scopes a differently-named app exe to its own LOCALAPPDATA root', () => {
+    renameSync(join(installDir, 'Orca.exe'), join(installDir, 'Phorca.exe'))
+    setProcessProp('execPath', join(installDir, 'Phorca.exe'))
+    const result = materializeRelocatedDaemonHost()
+    const dest = relocatedHostRoot()
+    expect(
+      getDaemonHostRootDir().startsWith(join(localAppDataDir, 'Phorca', 'daemon-host-profiles'))
+    ).toBe(true)
+    expect(result?.execPath).toBe(join(dest, 'Phorca.exe'))
+    expect(existsSync(join(dest, 'orca-terminal-daemon.exe'))).toBe(false)
+    expect(getRelocatedDaemonHost()?.execPath).toBe(join(dest, 'Phorca.exe'))
+    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
+  })
+
+  it('does not duplicate product identity when userData is the fallback root', () => {
+    delete process.env.LOCALAPPDATA
+    const result = materializeRelocatedDaemonHost()
+    expect(getDaemonHostRootDir()).toBe(join(userDataDir, 'daemon-host'))
+    expect(result?.execPath).toBe(join(relocatedHostRoot(), 'Orca.exe'))
+  })
+
   it.each([
     ['the binary', PROCESS_TREE_ADDON_REL],
     ['package.json', join(PROCESS_TREE_DIR_REL, 'package.json')],

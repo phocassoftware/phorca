@@ -2,11 +2,19 @@ import type { getReleaseDownloadUrl } from './releases/updater-release-readiness
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
 import { updaterMainWindow } from './testing/updater-test-main-window'
+import { UpdaterSetup } from './lifecycle/updater-setup'
 
-const { appMock, autoUpdaterMock, powerMonitorOnMock, moduleFactories, resetUpdaterMocks } =
-  await vi.hoisted(async () =>
-    (await import('./testing/updater-test-harness')).createUpdaterMocks()
-  )
+// vi.hoisted runs before static imports, so its mock factory must load inside the callback.
+const {
+  appMock,
+  autoUpdaterMock,
+  powerMonitorOnMock,
+  fetchNudgeMock,
+  moduleFactories,
+  resetUpdaterMocks
+} = await vi.hoisted(async () =>
+  (await import('./testing/updater-test-harness')).createUpdaterMocks()
+)
 
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
@@ -49,6 +57,24 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps explicit remote update support without starting desktop polling', async () => {
+    const mainWindow = updaterMainWindow(vi.fn())
+    const updater = new UpdaterSetup()
+
+    updater.setupAutoUpdater(mainWindow, undefined, true)
+
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.on).toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(fetchNudgeMock).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
+    expect(updater.getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'interactive',
+      automatic: true,
+      reason: 'available'
+    })
   })
 
   it('waits until the remaining interval before the next background check', async () => {
