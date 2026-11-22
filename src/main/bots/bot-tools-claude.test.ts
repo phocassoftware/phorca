@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BotLaunchTools } from './bot-launch-tools'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   claudeLaunchServers,
@@ -28,11 +28,12 @@ describe("a Claude Code bot's tools", () => {
     const configDir = mkdtempSync(join(tmpdir(), 'bot-tools-claude-'))
     dirs.push(configDir)
     const signIn = join(configDir, 'bot-tool-sign-in', 'bot-1')
+    const projectKey = signIn.split(sep).join('/')
     writeFileSync(
       join(configDir, '.claude.json'),
       JSON.stringify({
         mcpServers: { github: { command: 'gh-mcp' } },
-        projects: { [signIn]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
+        projects: { [projectKey]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
       })
     )
     writeFileSync(
