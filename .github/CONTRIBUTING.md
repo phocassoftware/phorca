@@ -2,7 +2,25 @@
 
 Thanks for contributing to Orca.
 
-Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
+**Phorca fork:** only the [Sync Orca release](ORCA_SYNC.md) workflow is retained. The
+upstream PR/build/deployment/release workflows described below are not installed
+in this fork. Run checks locally; they are not automatic PR gates.
+Selected `config/scripts/*.test.mjs` suites are also retired; the exact paths are
+listed in [`config/phorca-retired-tests.json`](../config/phorca-retired-tests.json).
+Their remaining script/build/runtime coverage is not retained elsewhere.
+
+## Before You Start
+
+- Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
+- Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
+- Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
+- For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
+- For shortcut labels, show `⌘` and `⇧` on macOS, and `Ctrl+` and `Shift+` on Linux and Windows.
+- For file paths, use Node or Electron path utilities such as `path.join`.
+- Orca must work against local repositories, remote servers, and SSH worktrees. Do not assume a process, file, credential, shell, or network path exists only on the local machine.
+- Orca supports many CLI agents, integrations, and git providers. Keep generic behavior provider-neutral; guard integration-specific logic behind explicit checks.
+- Keep changes well-engineered and performant: follow existing architecture, avoid unnecessary work in hot paths, clean up owned resources, and use concrete module names.
+- For UI work, follow [`docs/STYLEGUIDE.md`](../docs/STYLEGUIDE.md), use the tokens and shadcn primitives it specifies, and verify polished behavior across platforms, light/dark mode, and SSH latency.
 
 ## Local Setup
 
@@ -37,7 +55,8 @@ Put project-owned types in `.ts` files. `.d.ts` is reserved for ambient shims (e
 
 ## Checks Before Opening a PR
 
-Run the same checks CI runs, after the `mobile/` install above:
+Run the upstream project's checks locally after the `mobile/` install from
+[Local Setup](#local-setup). Phorca does not run these in PR CI:
 
 ```bash
 pnpm lint
@@ -66,7 +85,7 @@ Affected tests follow Vitest's static import graph, so run suites explicitly for
 
 Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
 
-Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers cut releases with the [Cut Release](https://github.com/stablyai/orca/actions/workflows/release-cut.yml) workflow.
+Version bumps, tags, and releases are maintainer-managed in Phorca. See [Sync Orca release](ORCA_SYNC.md).
 
 ## Getting Help
 

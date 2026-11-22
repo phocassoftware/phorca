@@ -10,11 +10,16 @@ import { UpdaterCheckFailure } from './updater-check-failure'
 import { getDelayedUpdateWakeDelayMs } from '../releases/updater-release-delay'
 
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
+  protected suppressDesktopUpdates = false
+
   protected getAutomaticRetryInterval(): number {
     return AUTO_UPDATE_RETRY_INTERVAL_MS
   }
 
   protected scheduleAutomaticUpdateCheck(delayMs: number): void {
+    if (this.suppressDesktopUpdates) {
+      return
+    }
     let effectiveDelayMs = delayMs
     // The retry constant identifies all retry-cadence callers, keeping backoff centralized.
     if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {

@@ -13,6 +13,14 @@ const electronBuilderConfig = require('../../../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('packages Phorca under its local-build identity without renaming the Windows executable', () => {
+    const contract = require('../../../../src/shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json')
+    expect(electronBuilderConfig.productName).toBe('Phorca')
+    expect(electronBuilderConfig.appId).toBe('com.phocassoftware.phorca')
+    expect(contract.appId).toBe('com.phocassoftware.phorca')
+    expect(electronBuilderConfig.win.executableName).toBe('Orca')
+  })
+
   // Bundled agent-browser answered "No skills found" because only its binary shipped (#17705).
   const hostBuilderPlatform = { darwin: 'mac', linux: 'linux', win32: 'win' }[process.platform]
   it.runIf(hostBuilderPlatform)(

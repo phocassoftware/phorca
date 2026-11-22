@@ -151,7 +151,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           return
         }
 
-        // Deferred Squirrel staging outlives quitAndInstall; keep the server intact until staging succeeds.
+        // Deferred Squirrel staging outlives quitAndInstall; keep sessions intact until it succeeds.
         if (this.isMacStagingDeferredToInstall() && !isMacInstallerReady()) {
           // MacUpdater's retained completion listener can install late; report timeout without abandoning the live handoff.
           this.macDeferredStagingTimer = setTimeout(() => {
@@ -159,12 +159,13 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
             recordUpdaterLifecycle(
               'macos_deferred_staging_slow',
               { timeoutMs: MAC_DEFERRED_STAGING_TIMEOUT_MS },
-              { level: 'warn', message: 'Squirrel has not staged the supervised serve update' }
+              { level: 'warn', message: 'Squirrel has not staged the requested update' }
             )
             this.sendInstallFailureStatus({
               state: 'error',
-              message:
-                'macOS has not finished preparing the update. Orca keeps serving and installs it once ready; restart the Orca service if it never does.',
+              message: supervisorOwnsRelaunch
+                ? 'macOS has not finished preparing the update. Orca keeps serving and installs it once ready; restart the Orca service if it never does.'
+                : 'macOS has not finished preparing the update. Orca installs it once ready; restart Orca if it never does.',
               ...(pendingVersion ? { version: pendingVersion } : {}),
               retryable: false
             })
@@ -216,9 +217,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
     }
   }
 
-  // Supervised serve disables autoInstallOnAppQuit; MacUpdater only stages inside quitAndInstall, so waiting first deadlocks.
+  // With install-on-quit disabled, MacUpdater starts Squirrel staging only on explicit install.
   protected isMacStagingDeferredToInstall(): boolean {
-    return process.platform === 'darwin' && this.updateInstallMode === 'supervised-headless-serve'
+    return process.platform === 'darwin' && this.autoUpdater?.autoInstallOnAppQuit === false
   }
 
   protected isAwaitingMacStaging(): boolean {

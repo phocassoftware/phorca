@@ -1,3 +1,5 @@
+Before resolving merge conflicts with upstream Orca, read and follow [MERGE-CONFLICTS.md](./MERGE-CONFLICTS.md).
+
 # Useful Commands
 
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)

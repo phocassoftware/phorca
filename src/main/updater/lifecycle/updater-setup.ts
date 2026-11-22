@@ -123,7 +123,12 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
+  setupAutoUpdater(
+    mainWindow: BrowserWindow | null,
+    opts?: UpdaterSetupOptions,
+    suppressDesktopUpdates = false
+  ): void {
+    this.suppressDesktopUpdates = suppressDesktopUpdates
     // Keep direct-window callers compatible; desktop composition supplies the lifecycle getter.
     this.getMainWindow = opts?.getMainWindow ?? (mainWindow ? () => mainWindow : this.getMainWindow)
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
@@ -136,7 +141,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
-    this.getAutomaticUpdates = opts?.getAutomaticUpdates ?? null
+    this.getAutomaticUpdates = suppressDesktopUpdates ? null : (opts?.getAutomaticUpdates ?? null)
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
 
@@ -164,7 +169,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     }
     // Implicit quit install requires interactive mode and an explicit non-root/AppImage marker; serve requires handoff.
     autoUpdater.autoInstallOnAppQuit =
-      this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
+      !suppressDesktopUpdates &&
+      this.updateInstallMode === 'interactive' &&
+      getLinuxPackageType() === 'non-root'
     // MacUpdater ignores quitAndInstall arguments; only the surviving CLI supervisor may relaunch serve.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Keep native updater diagnostics visible through local logging.
@@ -229,7 +236,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       isAwaitingMacStaging: () => this.isAwaitingMacStaging(),
       isMacStagingDeferredToInstall: () => this.isMacStagingDeferredToInstall(),
       watchMacStaging: (version) => this.watchMacStaging(version),
-      shouldDeferMacQuitForInstall: () => this.updateInstallMode === 'interactive',
+      shouldDeferMacQuitForInstall: () =>
+        this.updateInstallMode === 'interactive' && !this.isMacStagingDeferredToInstall(),
       recordCompletedUpdateCheck: () => this.recordCompletedUpdateCheck(),
       restoreReleaseUpdateSource: () => this.restoreReleaseUpdateSource(),
       sendCheckFailureStatus: (message, userInitiated, source, sourceError) =>
@@ -252,6 +260,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.userInitiatedCheck = value
       }
     })
+    if (suppressDesktopUpdates) {
+      return
+    }
 
     void this.checkForUpdateNudge()
     this.scheduleUpdateNudgeCheck()

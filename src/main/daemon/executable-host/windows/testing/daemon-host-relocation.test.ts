@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   utimesSync,
   writeFileSync
@@ -113,6 +114,34 @@ afterEach(() => {
 })
 
 describe('materializeRelocatedDaemonHost', () => {
+  it('isolates differently named installs and keeps the packaged executable name and bytes', () => {
+    const orcaHost = materializeRelocatedDaemonHost()
+    expect(orcaHost).not.toBeNull()
+    expect(dirname(getDaemonHostRootDir())).toBe(
+      join(localAppDataDir, 'Orca', 'daemon-host-profiles')
+    )
+
+    renameSync(join(installDir, 'Orca.exe'), join(installDir, 'Phorca.exe'))
+    setProcessProp('execPath', join(installDir, 'Phorca.exe'))
+    const phorcaHost = materializeRelocatedDaemonHost()
+
+    expect(dirname(getDaemonHostRootDir())).toBe(
+      join(localAppDataDir, 'Phorca', 'daemon-host-profiles')
+    )
+    expect(phorcaHost?.execPath).toBe(join(relocatedHostRoot(), 'Phorca.exe'))
+    expect(readFileSync(phorcaHost!.execPath, 'utf8')).toBe('exe-bytes')
+    expect(existsSync(orcaHost!.execPath)).toBe(true)
+  })
+
+  it('uses the userData daemon-host directory when LOCALAPPDATA is missing', () => {
+    delete process.env.LOCALAPPDATA
+
+    const result = materializeRelocatedDaemonHost()
+
+    expect(getDaemonHostRootDir()).toBe(join(userDataDir, 'daemon-host'))
+    expect(result?.execPath).toBe(join(relocatedHostRoot(), 'Orca.exe'))
+  })
+
   it('rematerializes a host whose copied addon went missing', () => {
     materializeRelocatedDaemonHost()
     const dest = relocatedHostRoot()

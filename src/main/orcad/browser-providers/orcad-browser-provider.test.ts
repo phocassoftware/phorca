@@ -86,3 +86,19 @@ describe('installed Electron lookup on Linux', () => {
     ).toContain(appImage)
   })
 })
+
+describe('installed Electron lookup on Windows', () => {
+  it('tries Phorca before Orca within each installer location', () => {
+    expect(
+      installedElectronCandidates('win32', 'C:\\Users\\test', {
+        LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local',
+        ProgramFiles: 'C:\\Program Files'
+      })
+    ).toEqual([
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Phorca\\Phorca.exe',
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe',
+      'C:\\Program Files\\Phorca\\Phorca.exe',
+      'C:\\Program Files\\Orca\\Orca.exe'
+    ])
+  })
+})
