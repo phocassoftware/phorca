@@ -1,275 +1,104 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '@orca/process-host'
-import { agentBrowserCommandOf } from '../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
-import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser-name'
+import { spawnProcess } from '@orca/process-host'
+import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import {
+  commitServeSupervisorParkOnQuit,
+  releaseServeSupervisorPark
+} from '../../updater/lifecycle/serve-supervisor-install-park'
 import {
   installedElectronCandidates,
-  resolveInstalledElectronExecutable,
-  resolveOrcadBrowserProvider
+  resolveOrcadBrowserProvider,
+  type OrcadBrowserProvider
 } from './orcad-browser-provider'
-import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-browser-process'
-import {
-  runtimeBrowserUnavailableCause,
-  setRuntimeBrowserUnavailableCause
-} from '../../runtime/browser/installation/runtime-browser-commands-factory'
 
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
-  spawnProcess: vi.fn()
+  spawnProcess: vi.fn(() => {
+    throw new Error('spawned')
+  })
 }))
 
-type BrowserState = {
-  activeTabId: string
-  tabs: { active: boolean; tabId: string; title: string; url: string }[]
-}
-
-const runProcessMock = vi.mocked(runProcess)
 const spawnProcessMock = vi.mocked(spawnProcess)
-let root: string
-let screenshotPath: string
-let browserState: BrowserState
 
-function success(data: unknown) {
-  return Promise.resolve({
-    code: 0,
-    signal: null,
-    stdout: JSON.stringify({ success: true, data, error: null }),
-    stderr: '',
-    timedOut: false
+// Windows resolves the home directory from USERPROFILE, so the park could not be redirected there.
+describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', () => {
+  let root: string
+  let executable: string
+  let provider: OrcadBrowserProvider | null = null
+  const originalHome = process.env.HOME
+  const originalPlatform = process.platform
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orcad-browser-provider-'))
+    // Install parks exist only for macOS app bundles.
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    // The install park lives under the user's Library; keep it inside this test.
+    process.env.HOME = root
+    const bundle = join(root, 'Applications', 'Orca.app')
+    executable = join(bundle, 'Contents', 'MacOS', 'Orca')
+    await mkdir(join(bundle, 'Contents', 'MacOS'), { recursive: true })
+    await writeFile(join(bundle, 'Contents', 'Info.plist'), 'v1')
+    spawnProcessMock.mockClear()
   })
-}
 
-function installAgentBrowserMock(): void {
-  runProcessMock.mockImplementation(async (spec) => {
-    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
-    if (command[0] === 'open') {
-      const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
-      active.url = command[1]
-      active.title = command[1] === 'about:blank' ? '' : 'Fixture page'
-      return success({ url: active.url, title: active.title })
-    }
-    if (command[0] === 'tab' && command.length === 1) {
-      return success({
-        tabs: browserState.tabs.map((tab) => ({
-          ...tab,
-          active: tab.tabId === browserState.activeTabId
-        }))
-      })
-    }
-    if (command[0] === 'tab' && command.length === 2) {
-      browserState.activeTabId = command[1]
-      return success({ tabId: command[1] })
-    }
-    if (command[0] === 'eval') {
-      return success({ result: 'Fixture page', origin: 'https://fixture.test/' })
-    }
-    if (command[0] === 'screenshot') {
-      return success({ path: screenshotPath })
-    }
-    if (command.join(' ') === 'snapshot -i --delta') {
-      return success({ snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 } })
-    }
-    if (command[0] === 'close') {
-      return success({ closed: true })
-    }
-    throw new Error(`Unexpected agent-browser command: ${command.join(' ')}`)
+  afterEach(async () => {
+    vi.useRealTimers()
+    await provider?.stop()
+    provider = null
+    await releaseServeSupervisorPark()
+    process.env.HOME = originalHome
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    await rm(root, { recursive: true, force: true })
   })
-}
 
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orcad-browser-provider-'))
-  screenshotPath = join(root, 'fixture.png')
-  await writeFile(screenshotPath, Buffer.from('fixture-image'))
-  browserState = {
-    activeTabId: 't1',
-    tabs: [{ active: true, tabId: 't1', title: '', url: 'about:blank' }]
-  }
-  runProcessMock.mockReset()
-  spawnProcessMock.mockReset()
-  installAgentBrowserMock()
-  setRuntimeBrowserUnavailableCause(null)
-})
+  it('waits for the new bundle when the desktop is installing an update on quit', async () => {
+    await commitServeSupervisorParkOnQuit(executable, macCoordinationRoot(root))
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
 
-afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
-})
-
-describe('ExternalChromiumBrowserProcess', () => {
-  it('navigates, evaluates, and screenshots through the operator browser', async () => {
-    const processHandle = new ExternalChromiumBrowserProcess(
-      '/agent-browser',
-      { executablePath: '/operator/chromium', provider: 'chromium' },
-      root
-    )
-    await processHandle.start()
-    const commands = processHandle.createCommands({
-      getRuntimeId: () => 'fixture-runtime',
-      getAgentBrowserBridge: () => null,
-      resolveWorkspaceSelector: async (selector) => ({ id: selector }),
-      resolveBrowserWorkspace: async (selector) => ({ id: selector }),
-      resolveBrowserNetworkExecutionHost: () => {
-        throw new Error('No browser network execution host')
-      },
-      getBrowserHostLeaseRegistry: () => {
-        throw new Error('No browser host lease registry')
-      },
-      getBrowserHostRequestRegistry: () => {
-        throw new Error('No browser host request registry')
-      },
-      getRuntimeBrowserPageRegistry: () => {
-        throw new Error('No runtime browser page registry')
-      },
-      getAuthoritativeWindow: () => {
-        throw new Error('No renderer')
-      },
-      getAvailableAuthoritativeWindow: () => null,
-      getOffscreenBrowserBackend: () => null
+    provider = await resolveOrcadBrowserProvider({
+      userDataPath: join(root, 'orcad'),
+      environment: {},
+      resolveInstalledElectronExecutable: async () => executable
     })
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+    expect(provider?.kind).toBe('electron')
 
-    await expect(
-      commands.browserTabCreate({
-        url: 'https://fixture.test/',
-        worktree: 'worktree-1',
-        page: 'page-1'
-      })
-    ).resolves.toEqual({ browserPageId: 'page-1' })
-    await expect(
-      commands.browserGoto({
-        url: 'https://fixture.test/next',
-        worktree: 'worktree-1',
-        page: 'page-1'
-      })
-    ).resolves.toEqual({ url: 'https://fixture.test/next', title: 'Fixture page' })
-    await expect(
-      commands.browserEval({
-        expression: 'document.title',
-        worktree: 'worktree-1',
-        page: 'page-1'
-      })
-    ).resolves.toEqual({ result: 'Fixture page', origin: 'https://fixture.test/' })
-    await expect(
-      commands.browserScreenshot({ format: 'png', worktree: 'worktree-1', page: 'page-1' })
-    ).resolves.toEqual({ data: Buffer.from('fixture-image').toString('base64'), format: 'png' })
-    await expect(
-      commands.browserSnapshot({
-        interactive: true,
-        delta: true,
-        worktree: 'worktree-1',
-        page: 'page-1'
-      })
-    ).resolves.toMatchObject({
-      browserPageId: 'page-1',
-      snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 },
-      url: 'https://fixture.test/next'
-    })
-    await expect(
-      commands.browserExec({
-        page: 'page-1',
-        worktree: 'worktree-1',
-        command:
-          '--session stolen --cdp 9222 --profile /tmp/stolen --executable-path /bad --args bad eval document.title'
-      })
-    ).resolves.toEqual({ result: 'Fixture page', origin: 'https://fixture.test/' })
-    const execArgs = runProcessMock.mock.calls.at(-1)?.[0].args ?? []
-    expect(execArgs).not.toContain('stolen')
-    expect(execArgs).not.toContain('9222')
-    expect(execArgs).not.toContain('/tmp/stolen')
-    expect(execArgs).not.toContain('/bad')
-
-    expect(runProcessMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        env: expect.objectContaining({ AGENT_BROWSER_EXECUTABLE_PATH: '/operator/chromium' })
-      })
+    // ShipIt swapped the bundle: Info.plist changed.
+    await writeFile(join(root, 'Applications', 'Orca.app', 'Contents', 'Info.plist'), 'v2-new')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() =>
+      expect(spawnProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({ program: executable })
+      )
     )
-    await processHandle.stop()
   })
 })
 
-describe('cross-platform browser provider paths', () => {
-  it('resolves installed Electron launchers on macOS, Linux, and Windows', () => {
-    expect(installedElectronCandidates('darwin', '/Users/test', {})).toContain(
-      '/Users/test/Applications/Orca.app/Contents/MacOS/Orca'
-    )
-    expect(installedElectronCandidates('linux', '/home/test', {})).toContain(
-      '/home/test/.local/bin/orca-ide'
-    )
-    const windowsCandidates = installedElectronCandidates('win32', 'C:\\Users\\test', {
-      LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local'
-    })
-    expect(windowsCandidates).toContain(
-      'C:\\Users\\test\\AppData\\Local\\Programs\\Phorca\\Phorca.exe'
-    )
-    expect(windowsCandidates).toContain('C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe')
-  })
-
-  it('uses platform-specific bundled agent-browser names', () => {
-    expect(orcadAgentBrowserNativeName('darwin', 'arm64')).toBe('agent-browser-darwin-arm64')
-    expect(orcadAgentBrowserNativeName('linux', 'x64')).toBe('agent-browser-linux-x64')
-    expect(orcadAgentBrowserNativeName('win32', 'x64')).toBe('agent-browser-win32-x64.exe')
+describe('installed Electron lookup on Linux', () => {
+  it('includes the AppImage serve runs from', () => {
+    const appImage = '/home/me/Applications/orca-linux.AppImage'
+    expect(
+      installedElectronCandidates('linux', '/home/me', { ORCA_SERVE_APPIMAGE: appImage })
+    ).toContain(appImage)
   })
 })
 
-describe.skipIf(process.platform === 'win32')('resolveInstalledElectronExecutable', () => {
-  async function writeExecutable(path: string, content: Buffer | string): Promise<void> {
-    await mkdir(join(path, '..'), { recursive: true })
-    await writeFile(path, content)
-    await chmod(path, 0o755)
-  }
-
-  it('rejects a symlink to the bash CLI shim and picks the install-dir binary', async () => {
-    const shim = join(root, 'share', 'orca-ide-shim')
-    const link = join(root, 'bin', 'orca-ide')
-    const electron = join(root, 'opt', 'Orca', 'orca-ide')
-    await writeExecutable(shim, '#!/usr/bin/env bash\nexec true\n')
-    await mkdir(join(link, '..'), { recursive: true })
-    await symlink(shim, link)
-    await writeExecutable(electron, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0]))
-
-    await expect(resolveInstalledElectronExecutable([link, electron])).resolves.toBe(electron)
-    await expect(resolveInstalledElectronExecutable([link])).resolves.toBeNull()
-  })
-})
-
-describe('resolveOrcadBrowserProvider', () => {
-  it('reports an ORCA_BROWSER_EXECUTABLE path that does not exist', async () => {
-    const missing = join(root, 'absent-chromium')
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: missing },
-        resolveInstalledElectronExecutable: async () => null,
-        resolveAgentBrowserBinary: () => '/agent-browser'
+describe('installed Electron lookup on Windows', () => {
+  it('tries Phorca before Orca within each installer location', () => {
+    expect(
+      installedElectronCandidates('win32', 'C:\\Users\\test', {
+        LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local',
+        ProgramFiles: 'C:\\Program Files'
       })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({
-      reason: 'executable_not_found',
-      detail: missing
-    })
+    ).toEqual([
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Phorca\\Phorca.exe',
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe',
+      'C:\\Program Files\\Phorca\\Phorca.exe',
+      'C:\\Program Files\\Orca\\Orca.exe'
+    ])
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'separates a non-executable ORCA_BROWSER_EXECUTABLE from a missing one',
-    async () => {
-      const executable = join(root, 'unchmodded-chromium')
-      await writeFile(executable, '')
-      await chmod(executable, 0o644)
-
-      await expect(
-        resolveOrcadBrowserProvider({
-          userDataPath: root,
-          environment: { ORCA_BROWSER_EXECUTABLE: executable },
-          resolveInstalledElectronExecutable: async () => null,
-          resolveAgentBrowserBinary: () => '/agent-browser'
-        })
-      ).resolves.toBeNull()
-      expect(runtimeBrowserUnavailableCause()).toEqual({
-        reason: 'executable_not_executable',
-        detail: executable
-      })
-    }
-  )
 })

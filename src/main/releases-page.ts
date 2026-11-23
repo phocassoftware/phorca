@@ -1,5 +1,5 @@
 import { dialog, shell } from 'electron'
-import { PHORCA_RELEASES_URL } from '../shared/release-channel'
+import { PHORCA_RELEASES_URL } from '../shared/updater/release-channel'
 
 const RELEASES_OPEN_FAILURE_TITLE = 'Unable to open Phorca Releases'
 

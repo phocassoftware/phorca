@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PHORCA_RELEASES_URL } from '../shared/release-channel'
 
 const { openExternalMock, showErrorBoxMock } = vi.hoisted(() => ({
   openExternalMock: vi.fn(),
@@ -13,6 +12,8 @@ vi.mock('electron', () => ({
 
 import { openReleasesPage } from './releases-page'
 
+const phorcaReleasesUrl = 'https://github.com/phocassoftware/phorca-releases/releases'
+
 describe('openReleasesPage', () => {
   beforeEach(() => {
     openExternalMock.mockReset().mockResolvedValue(undefined)
@@ -22,7 +23,7 @@ describe('openReleasesPage', () => {
   it('opens the private Phorca Releases page in the system browser', async () => {
     await openReleasesPage()
 
-    expect(openExternalMock).toHaveBeenCalledExactlyOnceWith(PHORCA_RELEASES_URL)
+    expect(openExternalMock).toHaveBeenCalledExactlyOnceWith(phorcaReleasesUrl)
     expect(showErrorBoxMock).not.toHaveBeenCalled()
   })
 
@@ -33,11 +34,11 @@ describe('openReleasesPage', () => {
     await openReleasesPage()
 
     expect(consoleError).toHaveBeenCalledWith(
-      `[releases] Failed to open ${PHORCA_RELEASES_URL}: browser unavailable`
+      `[releases] Failed to open ${phorcaReleasesUrl}: browser unavailable`
     )
     expect(showErrorBoxMock).toHaveBeenCalledWith(
       'Unable to open Phorca Releases',
-      expect.stringContaining(PHORCA_RELEASES_URL)
+      expect.stringContaining(phorcaReleasesUrl)
     )
     consoleError.mockRestore()
   })

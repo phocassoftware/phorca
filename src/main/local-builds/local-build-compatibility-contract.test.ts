@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { SCHEMA_VERSION } from '../../shared/constants'
-import compatibilityContract from '../../shared/local-build-compatibility-contract.json'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/local-build-compatibility-contract'
+import { SCHEMA_VERSION } from '../../shared/orca-profiles/constants'
+import compatibilityContract from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION

@@ -1,17 +1,17 @@
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
-import type { ReleaseBuild, ReleaseChannel } from '../../../shared/release-channel'
+import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from '../releases/updater-release-build-cache'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../../shared/update-status-types'
+} from '../../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
-} from '../../../shared/remote-server-update'
+} from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { createUpdaterDiagnosticLogger } from '../linux-package/linux-package-install-diagnostic'
 import { registerAutoUpdaterHandlers } from '../updater-events'
@@ -35,6 +35,7 @@ export type UpdaterSetupOptions = {
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
   getUpdateDelayDays?: () => number
+  getAutomaticUpdates?: () => boolean
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
 }
@@ -48,12 +49,20 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.checkForUpdatesFromMenu(options)
   }
 
-  downloadUpdate(): void {
-    super.downloadUpdate()
+  downloadUpdate(automatic = false): void {
+    super.downloadUpdate(automatic)
   }
 
-  quitAndInstall(): void {
-    super.quitAndInstall()
+  applyAutomaticUpdatesSetting(): void {
+    if (this.currentStatus.state === 'downloaded' && !this.currentStatus.installing) {
+      this.publishDownloadStatus(this.currentStatus)
+    } else {
+      this.downloadAvailableUpdateAutomatically()
+    }
+  }
+
+  quitAndInstall(automatic = false): void {
+    super.quitAndInstall(automatic)
   }
 
   isQuittingForUpdate(): boolean {
@@ -119,6 +128,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     opts?: UpdaterSetupOptions,
     suppressDesktopUpdates = false
   ): void {
+    this.suppressDesktopUpdates = suppressDesktopUpdates
     // Keep direct-window callers compatible; desktop composition supplies the lifecycle getter.
     this.getMainWindow = opts?.getMainWindow ?? (mainWindow ? () => mainWindow : this.getMainWindow)
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
@@ -131,6 +141,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
+    this.getAutomaticUpdates = suppressDesktopUpdates ? null : (opts?.getAutomaticUpdates ?? null)
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
 
@@ -150,6 +161,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     const autoUpdater = this.getAutoUpdater()
     configureMacShipItScheduling()
+    // Start automatic downloads after Orca publishes the offer and finishes release checks.
     autoUpdater.autoDownload = false
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false
@@ -157,7 +169,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     }
     // Implicit quit install requires interactive mode and an explicit non-root/AppImage marker; serve requires handoff.
     autoUpdater.autoInstallOnAppQuit =
-      this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
+      !suppressDesktopUpdates &&
+      this.updateInstallMode === 'interactive' &&
+      getLinuxPackageType() === 'non-root'
     // MacUpdater ignores quitAndInstall arguments; only the surviving CLI supervisor may relaunch serve.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Keep native updater diagnostics visible through local logging.
@@ -215,21 +229,23 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.markMissingManifestPrereleaseFallbackChecking(),
       performQuitAndInstall: () => this.performQuitAndInstall(),
       commitStagedMacInstall: () => this.commitStagedMacInstall(),
-      failMacStaging: (error) => this.failMacStaging(error),
+      failMacStaging: (error) => {
+        this.stopWatchingMacStaging()
+        this.failMacStaging(error)
+      },
       isAwaitingMacStaging: () => this.isAwaitingMacStaging(),
       isMacStagingDeferredToInstall: () => this.isMacStagingDeferredToInstall(),
-      shouldDeferMacQuitForInstall: () => this.updateInstallMode === 'interactive',
+      watchMacStaging: (version) => this.watchMacStaging(version),
+      shouldDeferMacQuitForInstall: () =>
+        this.updateInstallMode === 'interactive' && !this.isMacStagingDeferredToInstall(),
       recordCompletedUpdateCheck: () => this.recordCompletedUpdateCheck(),
       restoreReleaseUpdateSource: () => this.restoreReleaseUpdateSource(),
       sendCheckFailureStatus: (message, userInitiated, source, sourceError) =>
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
-      sendStatus: (status) => this.sendStatus(status),
-      scheduleAutomaticUpdateCheck: (delayMs) => {
-        if (!suppressDesktopUpdates) {
-          this.scheduleAutomaticUpdateCheck(delayMs)
-        }
-      },
+      sendStatus: (status) => this.publishDownloadStatus(status),
+      publishUpdateOffer: (status, options) => this.publishUpdateOffer(status, options),
+      scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>
         this.shouldSuppressMissingManifestPrereleaseFallbackEvent(message, error),
       suppressMissingManifestPrereleaseFallbackPromiseFailure: (message) =>

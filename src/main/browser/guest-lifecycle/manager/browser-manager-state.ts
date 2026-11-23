@@ -1,10 +1,12 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
 import type { ActiveDownload } from './downloads/browser-active-download'
@@ -38,6 +40,8 @@ export type OffscreenBrowserTabOpenRequest = {
 }
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
+  abstract invalidateGuestMemoryProtection(guest: Electron.WebContents): void
+
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext?: PopupOwnerContext | null,
@@ -188,7 +192,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   protected readonly downloadsById = new Map<string, ActiveDownload>()
-  protected readonly grabSessionController = new BrowserGrabSessionController()
+  protected readonly grabSessionController = new BrowserGrabSessionController((pageId, guest) => {
+    if (this.webContentsIdByTabId.get(pageId) === guest.id) {
+      this.invalidateGuestMemoryProtection(guest)
+    }
+  })
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate
@@ -208,6 +216,14 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setSiteDisplayController(controller: BrowserSiteDisplayController): void {
     this.siteDisplayController = controller
+  }
+
+  /** Runtime zoom for hosted pages, which have no renderer IPC of their own. */
+  zoomGuestPage(
+    guestId: number,
+    direction: BrowserPageZoomDirection
+  ): BrowserPageSiteDisplay | null {
+    return this.siteDisplayController?.zoomPage(guestId, direction) ?? null
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {
@@ -235,6 +251,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       if (browserTabId) {
         this.recordAppliedViewportOverride(browserTabId, guest.id, null)
       }
+      this.invalidateGuestMemoryProtection(guest)
     }
     try {
       guest.debugger.on('detach', onDetach)
